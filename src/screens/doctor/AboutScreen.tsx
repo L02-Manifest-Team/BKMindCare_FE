@@ -150,8 +150,8 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
   },
   logo: {
-    width: 120,
-    height: 120,
+    width: 300,
+    height: 300,
     marginBottom: 16,
   },
   appName: {

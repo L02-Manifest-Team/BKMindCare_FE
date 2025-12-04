@@ -1,39 +1,5 @@
 # BKMindCare - Ứng dụng Chăm sóc Sức khỏe Tâm thần
 
-## 📱 Giới thiệu
-
-BKMindCare là hệ thống hỗ trợ tâm lý cho sinh viên Trường Đại học Bách khoa - ĐHQG. TP.HCM. Ứng dụng di động được xây dựng bằng React Native và Expo, nhằm hỗ trợ sinh viên và người dùng quản lý sức khỏe tâm thần của mình. Ứng dụng cung cấp các tính năng như theo dõi tâm trạng, đặt lịch hẹn với bác sĩ, chat tư vấn, và các bài kiểm tra sức khỏe tâm thần.
-
-### 🎬 Màn hình khởi động
-
-Khi mở ứng dụng, người dùng sẽ trải qua các màn hình sau:
-
-1. **Splash Screen** (Màn hình chào mừng)
-   - Hiển thị logo BKMindCare với animation mượt mà (fade in và scale)
-   - Logo được thiết kế với biểu tượng yin-yang, lá cây, ngôi sao và khuôn mặt thiền định, thể hiện sự cân bằng và chăm sóc sức khỏe tâm thần
-   - Tự động chuyển sang màn hình Onboarding sau 2 giây
-   - Nền màu xanh dương nhạt (#E3F2FD) tạo cảm giác bình yên
-
-2. **Onboarding Screen** (Màn hình giới thiệu)
-   - **Trang 1 - Chào mừng**: 
-     - Tiêu đề: "Welcome to BKMindCare"
-     - Mô tả: "Stress is part of the Bach Khoa University's health journey — but you don't have to face it alone. Our mental health experts are ready to help you find your balance."
-     - Icon thiền định 🧘
-   
-   - **Trang 2 - Tính năng và Cách hoạt động**:
-     - **Tính năng chính**:
-       - 1-on-1 Counseling with Experts: Đặt lịch tư vấn với chuyên gia, có sẵn 24/7
-       - Mental Health Assessment Tests: Các bài test để hiểu sức khỏe tâm thần và theo dõi tiến trình
-       - Self Care Resources: Tài nguyên chăm sóc bản thân hàng ngày
-     
-     - **Cách hoạt động** (3 bước):
-       1. **Sign Up**: Tạo tài khoản miễn phí để kết nối với chuyên gia sức khỏe tâm thần
-       2. **Book Session**: Chọn chuyên gia phù hợp, thời gian thuận tiện và đặt lịch hẹn
-       3. **Get Support**: Nhận hỗ trợ chuyên nghiệp qua tin nhắn, video hoặc gặp trực tiếp
-   
-   - Người dùng có thể bỏ qua (Skip) hoặc điều hướng qua các trang bằng nút "Next"/"Get Started"
-   - Sau khi hoàn tất, ứng dụng sẽ chuyển đến màn hình đăng nhập
-
 ## ✨ Tính năng chính
 
 ### 👤 Dành cho Người dùng (User)

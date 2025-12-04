@@ -375,8 +375,8 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   logo: {
-    width: 48,
-    height: 48,
+    width: 72,
+    height: 72,
     marginRight: 12,
   },
   headerTitleContainer: {

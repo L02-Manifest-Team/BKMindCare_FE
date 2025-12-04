@@ -93,7 +93,7 @@ const MoodResultScreen = () => {
     const gapLength = 4;
     const dashes = Math.floor(length / (dashLength + gapLength));
     const dashViews = [];
-    
+
     for (let i = 0; i < dashes; i++) {
       dashViews.push(
         <View
@@ -109,7 +109,7 @@ const MoodResultScreen = () => {
         />
       );
     }
-    
+
     return dashViews;
   };
 
@@ -123,256 +123,224 @@ const MoodResultScreen = () => {
         <View style={styles.headerPlaceholder} />
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Section */}
-      <View style={styles.profileSection}>
-        <View style={styles.avatarContainer}>
-          <Image 
-            source={require('../../../assets/avatar.png')} 
-            style={styles.avatar}
-            resizeMode="cover"
-          />
-        </View>
-        <Text style={styles.userName}>Truc Quynh</Text>
-        <View style={styles.tagContainer}>
-          <Text style={styles.tagText}>Computer Science</Text>
-        </View>
-      </View>
-
-      {/* Current Mood Card */}
-      <View style={styles.moodCard}>
-        <View style={styles.moodCardHeader}>
-          <TouchableOpacity
-            style={styles.periodSelector}
-            onPress={() => setShowPeriodModal(true)}
-          >
-            <Text style={styles.moodCardTitle}>
-              {periodOptions.find(opt => opt.value === selectedPeriod)?.label}
-            </Text>
-            <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
+        <View style={styles.profileSection}>
+          <View style={styles.avatarContainer}>
+            <Image
+              source={require('../../../assets/avatar.png')}
+              style={styles.avatar}
+              resizeMode="cover"
+            />
+          </View>
+          <Text style={styles.userName}>Truc Quynh</Text>
+          <View style={styles.tagContainer}>
+            <Text style={styles.tagText}>Computer Science</Text>
+          </View>
         </View>
 
-        {/* Period Selection Modal */}
-        <Modal
-          visible={showPeriodModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowPeriodModal(false)}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowPeriodModal(false)}
-          >
-            <View style={styles.modalContent}>
-              {periodOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.modalOption,
-                    selectedPeriod === option.value && styles.modalOptionSelected,
-                  ]}
-                  onPress={() => {
-                    setSelectedPeriod(option.value);
-                    setShowPeriodModal(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.modalOptionText,
-                      selectedPeriod === option.value && styles.modalOptionTextSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                  {selectedPeriod === option.value && (
-                    <Ionicons name="checkmark" size={20} color={Colors.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </TouchableOpacity>
-        </Modal>
-
-        {/* Mood Chart */}
-        <View style={styles.chartContainer}>
-          {/* Y-axis labels with mood images - fixed position */}
-          <View style={styles.yAxis}>
-            {moodLevels.map((level, index) => {
-              const yPosition = (index / (moodLevels.length - 1)) * 100;
-              return (
-                <View
-                  key={level.level}
-                  style={[
-                    styles.yAxisLabel,
-                    { top: `${yPosition}%`, marginTop: index === 0 ? -12 : index === moodLevels.length - 1 ? 12 : 0 },
-                  ]}
-                >
-                  <Image
-                    source={level.image}
-                    style={styles.moodIcon}
-                    resizeMode="contain"
-                  />
-                </View>
-              );
-            })}
+        {/* Current Mood Card */}
+        <View style={styles.moodCard}>
+          <View style={styles.moodCardHeader}>
+            <TouchableOpacity
+              style={styles.periodSelector}
+              onPress={() => setShowPeriodModal(true)}
+            >
+              <Text style={styles.moodCardTitle}>
+                {periodOptions.find(opt => opt.value === selectedPeriod)?.label}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
           </View>
 
-          {/* Chart Area with horizontal scroll if needed */}
-          <View style={styles.chartWrapper}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={needsScroll}
-              contentContainerStyle={[styles.chartScrollContent, { width: needsScroll ? chartWidth : '100%' }]}
-              style={styles.chartScrollView}
+          {/* Period Selection Modal */}
+          <Modal
+            visible={showPeriodModal}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowPeriodModal(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setShowPeriodModal(false)}
             >
-              <View style={[styles.chartArea, { width: needsScroll ? chartWidth : '100%' }]}>
-                <View style={styles.chart}>
-              {/* Grid lines (dashed vertical lines) */}
-              {moodData.map((_, index) => (
-                <View
-                  key={`grid-${index}`}
-                  style={[
-                    styles.gridLine,
-                    { left: getMoodX(index, moodData.length) - 0.5 },
-                  ]}
-                />
-              ))}
-
-              {/* Mood line - simplified approach */}
-              <View style={styles.lineContainer}>
-                {/* Draw lines between points */}
-                {moodData.map((data, index) => {
-                  if (index === 0) return null;
-                  const x1 = getMoodX(index - 1, moodData.length);
-                  const y1 = getMoodY(moodData[index - 1].mood);
-                  const x2 = getMoodX(index, moodData.length);
-                  const y2 = getMoodY(data.mood);
-                  
-                  const dx = x2 - x1;
-                  const dy = y2 - y1;
-                  const length = Math.sqrt(dx * dx + dy * dy);
-                  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-                  
-                  // Special case for Day 2: line goes up to sad level but no point
-                  if (index === 1 && selectedPeriod === 'current') {
-                    const sadY = getMoodY(0); // Sad level (top)
-                    const upDy = sadY - y2;
-                    const upLength = Math.sqrt(dx * dx + upDy * upDy);
-                    const upAngle = Math.atan2(upDy, dx) * (180 / Math.PI);
-                    
-                    return (
-                      <React.Fragment key={`line-${index}`}>
-                        {/* Line from Day 1 to Day 2 */}
-                        <View
-                          style={[
-                            styles.line,
-                            {
-                              left: x1,
-                              top: y1,
-                              width: length,
-                              transform: [{ rotate: `${angle}deg` }],
-                            },
-                          ]}
-                        />
-                        {/* Line going up to sad level from Day 2 */}
-                        <View
-                          style={[
-                            styles.line,
-                            {
-                              left: x2,
-                              top: y2,
-                              width: upLength,
-                              transform: [{ rotate: `${upAngle}deg` }],
-                              opacity: 0.4,
-                            },
-                          ]}
-                        />
-                      </React.Fragment>
-                    );
-                  }
-                  
-                  return (
-                    <View
-                      key={`line-${index}`}
-                      style={[
-                        styles.line,
-                        {
-                          left: x1,
-                          top: y1,
-                          width: length,
-                          transform: [{ rotate: `${angle}deg` }],
-                        },
-                      ]}
-                    />
-                  );
-                })}
-
-                {/* Data points */}
-                {moodData.map((data, index) => {
-                  const isLastDay = index === moodData.length - 1;
-                  const x = getMoodX(index, moodData.length);
-                  const y = getMoodY(data.mood);
-                  
-                  // Day 5: show dashed horizontal line (for current period)
-                  if (isLastDay && selectedPeriod === 'current' && data.day === 'Day 5') {
-                    const dashLineLength = needsScroll ? 100 : Math.min(width - x - 100, 150);
-                    return (
-                      <React.Fragment key={`point-${index}`}>
-                        {renderDashedLine(x, y, dashLineLength)}
-                        <View style={[styles.pointContainer, { left: x - 5, top: y - 5 }]}>
-                          <View style={styles.point} />
-                        </View>
-                      </React.Fragment>
-                    );
-                  }
-                  
-                  // Day 2: show point at happy level (line goes up but no point at sad level)
-                  
-                  return (
-                    <View key={`point-${index}`} style={[styles.pointContainer, { left: x - 4, top: y - 4 }]}>
-                      <View style={styles.point} />
-                    </View>
-                  );
-                })}
-              </View>
-
-              {/* X-axis labels */}
-              <View style={styles.xAxis}>
-                {moodData.map((data, index) => (
-                  <Text
-                    key={`label-${index}`}
+              <View style={styles.modalContent}>
+                {periodOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
                     style={[
-                      styles.xAxisLabel,
-                      { left: getMoodX(index, moodData.length) - 25 },
+                      styles.modalOption,
+                      selectedPeriod === option.value && styles.modalOptionSelected,
                     ]}
+                    onPress={() => {
+                      setSelectedPeriod(option.value);
+                      setShowPeriodModal(false);
+                    }}
                   >
-                    {data.day}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        selectedPeriod === option.value && styles.modalOptionTextSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                    {selectedPeriod === option.value && (
+                      <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                    )}
+                  </TouchableOpacity>
                 ))}
               </View>
+            </TouchableOpacity>
+          </Modal>
+          {/* Mood Chart */}
+          <View style={styles.chartContainer}>
+            {/* Y-axis labels with mood images - fixed position */}
+            <View style={styles.yAxis}>
+              {moodLevels.map((level, index) => {
+                const yPosition = getMoodY(level.level);
+                return (
+                  <View
+                    key={level.level}
+                    style={[
+                      styles.yAxisLabel,
+                      {
+                        top: yPosition - 17.5, // Center icon (35/2)
+                        height: 35,
+                      },
+                    ]}
+                  >
+                    <Image
+                      source={level.image}
+                      style={styles.moodIcon}
+                      resizeMode="contain"
+                    />
+                  </View>
+                );
+              })}
             </View>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
 
-        {/* Encouragement Message */}
-        <View style={styles.encouragementContainer}>
-          <View style={styles.encouragementIcon}>
-            <Text style={styles.encouragementEmoji}>😊</Text>
+            {/* Chart Area with horizontal scroll if needed */}
+            <View style={styles.chartWrapper}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={needsScroll}
+                contentContainerStyle={[styles.chartScrollContent, { width: needsScroll ? chartWidth : '100%' }]}
+                style={styles.chartScrollView}
+              >
+                <View style={[styles.chartArea, { width: needsScroll ? chartWidth : '100%' }]}>
+                  <View style={styles.chart}>
+                    {/* Grid lines (dashed vertical lines) */}
+                    {moodData.map((_, index) => (
+                      <View
+                        key={`grid-${index}`}
+                        style={[
+                          styles.gridLine,
+                          { left: getMoodX(index, moodData.length) - 0.5 },
+                        ]}
+                      />
+                    ))}
+
+                    {/* Mood line - simplified approach */}
+                    <View style={styles.lineContainer}>
+                      {/* Draw lines between points */}
+                      {moodData.map((data, index) => {
+                        if (index === 0) return null;
+                        const x1 = getMoodX(index - 1, moodData.length);
+                        const y1 = getMoodY(moodData[index - 1].mood);
+                        const x2 = getMoodX(index, moodData.length);
+                        const y2 = getMoodY(data.mood);
+
+                        const dx = x2 - x1;
+                        const dy = y2 - y1;
+                        const length = Math.sqrt(dx * dx + dy * dy);
+                        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+                        // Center point of the line
+                        const cx = (x1 + x2) / 2;
+                        const cy = (y1 + y2) / 2;
+
+                        return (
+                          <View
+                            key={`line-${index}`}
+                            style={[
+                              styles.line,
+                              {
+                                left: cx - length / 2,
+                                top: cy - 1.25, // Half of height (2.5)
+                                width: length,
+                                transform: [{ rotate: `${angle}deg` }],
+                              },
+                            ]}
+                          />
+                        );
+                      })}
+
+                      {/* Data points */}
+                      {moodData.map((data, index) => {
+                        const isLastDay = index === moodData.length - 1;
+                        const x = getMoodX(index, moodData.length);
+                        const y = getMoodY(data.mood);
+
+                        // Day 5: show dashed horizontal line (for current period)
+                        if (isLastDay && selectedPeriod === 'current' && data.day === 'Day 5') {
+                          const dashLineLength = needsScroll ? 100 : Math.min(width - x - 100, 150);
+                          return (
+                            <React.Fragment key={`point-${index}`}>
+                              {renderDashedLine(x, y, dashLineLength)}
+                              <View style={[styles.pointContainer, { left: x - 5, top: y - 5 }]}>
+                                <View style={styles.point} />
+                              </View>
+                            </React.Fragment>
+                          );
+                        }
+
+                        // Day 2: show point at happy level (line goes up but no point at sad level)
+
+                        return (
+                          <View key={`point-${index}`} style={[styles.pointContainer, { left: x - 4, top: y - 4 }]}>
+                            <View style={styles.point} />
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* X-axis labels */}
+                    <View style={styles.xAxis}>
+                      {moodData.map((data, index) => (
+                        <Text
+                          key={`label-${index}`}
+                          style={[
+                            styles.xAxisLabel,
+                            { left: getMoodX(index, moodData.length) - 25 },
+                          ]}
+                        >
+                          {data.day}
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
           </View>
-          <View style={styles.encouragementTextContainer}>
-            <Text style={styles.encouragementTitle}>You're doing well</Text>
-            <Text style={styles.encouragementSubtitle}>Continue keep track of your mood!</Text>
+
+          {/* Encouragement Message */}
+          <View style={styles.encouragementContainer}>
+            <View style={styles.encouragementIcon}>
+              <Text style={styles.encouragementEmoji}>😊</Text>
+            </View>
+            <View style={styles.encouragementTextContainer}>
+              <Text style={styles.encouragementTitle}>You're doing well</Text>
+              <Text style={styles.encouragementSubtitle}>Continue keep track of your mood!</Text>
+            </View>
           </View>
         </View>
-      </View>
       </ScrollView>
     </View>
   );

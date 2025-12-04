@@ -17,6 +17,7 @@ const OnboardingScreen = () => {
       title: 'Welcome to BKMindCare',
       description: 'Stress is part of the Bach Khoa University\'s health journey — but you don\'t have to face it alone. Our mental health experts are ready to help you find your balance.',
       illustration: '🧘',
+      
     },
     {
       title: 'Features & How it Works',
@@ -56,6 +57,14 @@ const OnboardingScreen = () => {
       scrollViewRef.current?.scrollTo({ x: nextPage * width, animated: true });
     } else {
       navigation.navigate('Login' as never);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentPage > 0) {
+      const prevPage = currentPage - 1;
+      setCurrentPage(prevPage);
+      scrollViewRef.current?.scrollTo({ x: prevPage * width, animated: true });
     }
   };
 
@@ -156,12 +165,21 @@ const OnboardingScreen = () => {
           ))}
         </View>
         <View style={styles.buttons}>
-          <CustomButton
-            title="Skip"
-            onPress={handleSkip}
-            variant="outline"
-            style={styles.skipButton}
-          />
+          {currentPage === 0 ? (
+            <CustomButton
+              title="Skip"
+              onPress={handleSkip}
+              variant="outline"
+              style={styles.skipButton}
+            />
+          ) : (
+            <CustomButton
+              title="Back"
+              onPress={handleBack}
+              variant="outline"
+              style={styles.skipButton}
+            />
+          )}
           <CustomButton
             title={currentPage === pages.length - 1 ? 'Get Started' : 'Next'}
             onPress={handleNext}
@@ -325,6 +343,7 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     flex: 0.45,
+
   },
   nextButton: {
     flex: 0.45,

@@ -293,8 +293,8 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   logo: {
-    width: 32,
-    height: 32,
+    width: 72,
+    height: 72,
     marginRight: 12,
   },
   headerTitleContainer: {
