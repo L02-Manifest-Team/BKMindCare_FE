@@ -217,10 +217,31 @@ const DoctorChatScreen = () => {
                 </View>
               );
             }
-            // Patient messages - show anonymous icon
+            // Patient messages - respect anonymous flag
+            if (isAnonymous) {
+              return (
+                <View style={[styles.avatar, styles.anonymousAvatar]}>
+                  <Ionicons name="lock-closed" size={16} color={Colors.textSecondary} />
+                </View>
+              );
+            }
+
+            const patientAvatar = props.currentMessage?.user.avatar;
+            const patientName = props.currentMessage?.user.name || 'Sinh viên';
+
+            if (patientAvatar) {
+              return (
+                <Image
+                  source={{ uri: patientAvatar }}
+                  style={styles.messageAvatar}
+                />
+              );
+            }
+
+            const initial = patientName.charAt(0).toUpperCase();
             return (
-              <View style={[styles.avatar, styles.anonymousAvatar]}>
-                <Ionicons name="lock-closed" size={16} color={Colors.textSecondary} />
+              <View style={styles.avatar}>
+                <Text style={styles.avatarInitial}>{initial}</Text>
               </View>
             );
           }}
@@ -368,6 +389,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
+  },
+  avatarInitial: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   anonymousAvatar: {
     backgroundColor: Colors.backgroundLight,

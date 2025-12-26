@@ -109,9 +109,10 @@ better. You deserve support.`;
 
   const handleBookAppointment = () => {
     if (selectedDate && selectedTime) {
+      const formattedDate = selectedDate.toISOString().split('T')[0];
       navigation.navigate('Appointment' as never, {
         doctorId: doctor.id,
-        date: selectedDate,
+        date: formattedDate,
         time: selectedTime,
         type: appointmentType,
       } as never);

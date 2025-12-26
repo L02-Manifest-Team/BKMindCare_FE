@@ -81,8 +81,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   logo: {
-    width: 150,
-    height: 150,
+    width: 200,
+    height: 200,
   },
   content: {
     flex: 1,

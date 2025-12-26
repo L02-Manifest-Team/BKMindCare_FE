@@ -60,6 +60,14 @@ const OnboardingScreen = () => {
     }
   };
 
+  const handleBack = () => {
+    if (currentPage > 0) {
+      const prevPage = currentPage - 1;
+      setCurrentPage(prevPage);
+      scrollViewRef.current?.scrollTo({ x: prevPage * width, animated: true });
+    }
+  };
+
   const handleSkip = () => {
     navigation.navigate('Login' as never);
   };
@@ -157,12 +165,21 @@ const OnboardingScreen = () => {
           ))}
         </View>
         <View style={styles.buttons}>
-          <CustomButton
-            title="Skip"
-            onPress={handleSkip}
-            variant="outline"
-            style={styles.skipButton}
-          />
+          {currentPage === 0 ? (
+            <CustomButton
+              title="Skip"
+              onPress={handleSkip}
+              variant="outline"
+              style={styles.skipButton}
+            />
+          ) : (
+            <CustomButton
+              title="Back"
+              onPress={handleBack}
+              variant="outline"
+              style={styles.skipButton}
+            />
+          )}
           <CustomButton
             title={currentPage === pages.length - 1 ? 'Get Started' : 'Next'}
             onPress={handleNext}

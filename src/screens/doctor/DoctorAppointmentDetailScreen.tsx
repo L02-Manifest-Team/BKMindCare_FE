@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { CustomButton } from '../../components/CustomButton';
+import { AppointmentPopup } from '../../components/AppointmentPopup';
 import { AppointmentType } from '../../types';
 
 const DoctorAppointmentDetailScreen = () => {
@@ -30,21 +31,39 @@ const DoctorAppointmentDetailScreen = () => {
   const tags = routeParams?.tags || ['Anxiety'];
 
   const [status, setStatus] = useState<'pending' | 'confirmed' | 'rejected'>('pending');
+  const [showConfirmSuccessPopup, setShowConfirmSuccessPopup] = useState(false);
+  const [showRejectConfirmPopup, setShowRejectConfirmPopup] = useState(false);
+  const [showRejectSuccessPopup, setShowRejectSuccessPopup] = useState(false);
 
   const handleConfirm = () => {
+    setShowConfirmSuccessPopup(true);
+  };
+
+  const handleConfirmSuccessClose = () => {
+    setShowConfirmSuccessPopup(false);
     setStatus('confirmed');
     // TODO: Update appointment status in database
     setTimeout(() => {
       navigation.goBack();
-    }, 1000);
+    }, 300);
   };
 
   const handleReject = () => {
+    setShowRejectConfirmPopup(true);
+  };
+
+  const handleRejectConfirm = () => {
+    setShowRejectConfirmPopup(false);
+    setShowRejectSuccessPopup(true);
+  };
+
+  const handleRejectSuccessClose = () => {
+    setShowRejectSuccessPopup(false);
     setStatus('rejected');
     // TODO: Update appointment status in database
     setTimeout(() => {
       navigation.goBack();
-    }, 1000);
+    }, 300);
   };
 
   const getStatusColor = () => {
@@ -216,6 +235,24 @@ const DoctorAppointmentDetailScreen = () => {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Popups */}
+      <AppointmentPopup
+        visible={showConfirmSuccessPopup}
+        type="success-confirm"
+        onClose={handleConfirmSuccessClose}
+      />
+      <AppointmentPopup
+        visible={showRejectConfirmPopup}
+        type="confirm-reject"
+        onClose={() => setShowRejectConfirmPopup(false)}
+        onConfirm={handleRejectConfirm}
+      />
+      <AppointmentPopup
+        visible={showRejectSuccessPopup}
+        type="success-reject"
+        onClose={handleRejectSuccessClose}
+      />
     </View>
   );
 };

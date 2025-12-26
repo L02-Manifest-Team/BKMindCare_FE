@@ -71,10 +71,14 @@ const DoctorChatListScreen = () => {
               allMessages.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
               const lastMessage = allMessages[0];
               const isAnonymous = chatId.includes('anonymous');
+              const isDoctorMessage = lastMessage.user?._id?.toString().startsWith('doctor');
+              const patientDisplayName = isAnonymous
+                ? 'Sinh viên ẩn danh'
+                : (isDoctorMessage ? 'Sinh viên' : lastMessage.user?.name || 'Sinh viên');
 
               loadedConversations.push({
                 id: chatId,
-                patientName: isAnonymous ? 'Sinh viên ẩn danh' : 'Sinh viên',
+                patientName: patientDisplayName,
                 lastMessage: lastMessage.text,
                 lastMessageTime: lastMessage.createdAt,
                 unreadCount: 0,

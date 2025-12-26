@@ -288,8 +288,8 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   logo: {
-    width: 56,
-    height: 56,
+    width: 72,
+    height: 72,
   },
   greetingSection: {
     flex: 1,
