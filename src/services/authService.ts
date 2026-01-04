@@ -1,0 +1,128 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api, setAuthToken, removeAuthToken } from './api';
+
+export interface RegisterData {
+  email: string;
+  password: string;
+  full_name: string;  // Backend uses snake_case
+  phone_number: string;  // Backend uses snake_case
+  role: 'PATIENT' | 'DOCTOR';
+}
+
+export interface LoginData {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  refresh_token?: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  fullName: string;
+  phoneNumber: string;
+  avatar: string | null;
+  role: 'PATIENT' | 'DOCTOR';
+  specialization?: string;
+  bio?: string;
+  createdAt: string;
+}
+
+export const authService = {
+  // Register new user
+  register: async (data: RegisterData): Promise<UserProfile> => {
+    try {
+      // Register returns user profile, not tokens
+      const userProfile = await api.post<UserProfile>('/auth/register', data);
+      
+      // Then login to get tokens
+      const loginResponse = await api.post<AuthResponse>('/auth/login', {
+        email: data.email,
+        password: data.password,
+      });
+      
+      // Save tokens
+      await setAuthToken(loginResponse.access_token);
+      if (loginResponse.refresh_token) {
+        await AsyncStorage.setItem('refreshToken', loginResponse.refresh_token);
+      }
+      await AsyncStorage.setItem('userRole', userProfile.role);
+      await AsyncStorage.setItem('userId', String(userProfile.id));
+      
+      return userProfile;
+    } catch (error) {
+      console.error('Register error:', error);
+      throw error;
+    }
+  },
+
+  // Login user
+  login: async (data: LoginData): Promise<UserProfile> => {
+    try {
+      const response = await api.post<AuthResponse>('/auth/login', data);
+      
+      // Save tokens
+      await setAuthToken(response.access_token);
+      if (response.refresh_token) {
+        await AsyncStorage.setItem('refreshToken', response.refresh_token);
+      }
+      
+      // Get user profile
+      const userProfile = await api.get<UserProfile>('/auth/me');
+      await AsyncStorage.setItem('userRole', userProfile.role);
+      await AsyncStorage.setItem('userId', String(userProfile.id));
+      
+      return userProfile;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
+  },
+
+  // Logout user
+  logout: async (): Promise<void> => {
+    try {
+      await removeAuthToken();
+      await AsyncStorage.removeItem('userRole');
+      await AsyncStorage.removeItem('userId');
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
+    }
+  },
+
+  // Get current user profile
+  getCurrentUser: async (): Promise<UserProfile> => {
+    try {
+      const response = await api.get<UserProfile>('/auth/me');
+      return response;
+    } catch (error) {
+      console.error('Get current user error:', error);
+      throw error;
+    }
+  },
+
+  // Check if user is authenticated
+  isAuthenticated: async (): Promise<boolean> => {
+    try {
+      const token = await AsyncStorage.getItem('accessToken');
+      return !!token;
+    } catch (error) {
+      return false;
+    }
+  },
+
+  // Get user role
+  getUserRole: async (): Promise<string | null> => {
+    try {
+      return await AsyncStorage.getItem('userRole');
+    } catch (error) {
+      return null;
+    }
+  },
+};
+

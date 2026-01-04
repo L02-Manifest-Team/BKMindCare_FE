@@ -27,6 +27,9 @@
     "plugins": [],
     "experiments": {
       "typedRoutes": false
+    },
+    "packagerOpts": {
+      "port": 8081
     }
   }
 }
