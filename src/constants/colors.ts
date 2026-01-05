@@ -6,6 +6,7 @@ export const Colors = {
   success: '#4CAF50',
   successLight: '#E8F5E9',
   warning: '#FFC107',
+  warningLight: '#FFF8E1', // Light amber/warning color
   error: '#F44336',
   background: '#FFFFFF',
   backgroundLight: '#F5F5F5',

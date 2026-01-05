@@ -249,9 +249,9 @@ const JournalScreen = () => {
             entries.map((entry) => {
               // Handle both string and datetime formats
               let dateStr = entry.created_at;
-              if (typeof entry.created_at === 'object' && entry.created_at !== null) {
+              if (typeof (entry.created_at as any) === 'object' && entry.created_at !== null) {
                 // If it's a datetime object, convert to string
-                dateStr = entry.created_at.toString();
+                dateStr = (entry.created_at as any).toString();
               }
               
               return (

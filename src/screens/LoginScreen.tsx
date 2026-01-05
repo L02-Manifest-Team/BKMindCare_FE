@@ -16,11 +16,12 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/colors';
-import { authService } from '../services/authService';
+import { useAuth } from '../context/AuthContext';
 import { moodService } from '../services/moodService';
 
 const LoginScreen = () => {
   const navigation = useNavigation();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -40,7 +41,7 @@ const LoginScreen = () => {
 
     setLoading(true);
     try {
-      const userProfile = await authService.login({ email, password });
+      const userProfile = await login(email, password);
       
       if (userProfile.role === 'DOCTOR') {
         navigation.reset({
@@ -62,7 +63,11 @@ const LoginScreen = () => {
         }
       }
     } catch (error: any) {
-      Alert.alert('Lỗi', error.message || 'Đăng nhập thất bại');
+      // Extract error message from API response
+      const errorMessage = error.response?.data?.detail || 
+                          error.message || 
+                          'Email hoặc mật khẩu không đúng';
+      Alert.alert('Đăng nhập thất bại', errorMessage);
     } finally {
       setLoading(false);
     }

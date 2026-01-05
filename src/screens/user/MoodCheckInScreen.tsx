@@ -74,8 +74,8 @@ const MoodCheckInScreen = () => {
         {
           text: 'OK',
           onPress: () => {
-            // Navigate back to dashboard
-            navigation.goBack();
+            // Navigate to dashboard instead of goBack to avoid GO_BACK error
+            navigation.navigate('UserDashboard' as never);
           },
         },
       ]);

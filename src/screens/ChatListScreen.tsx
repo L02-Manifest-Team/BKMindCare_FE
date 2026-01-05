@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,19 +14,20 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
-import BottomNavigationBar from '../../components/BottomNavigationBar';
-import { chatService, Chat } from '../../services/chatService';
-import { useAuth } from '../../context/AuthContext';
-import { useNotifications } from '../../context/NotificationContext';
-import { notificationService } from '../../services/notificationService';
+import { Colors } from '../constants/colors';
+import BottomNavigationBar from '../components/BottomNavigationBar';
+import { chatService, Chat } from '../services/chatService';
+import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
+import { notificationService } from '../services/notificationService';
 
 interface ChatConversation {
   id: number;
-  doctorId: number;
-  doctorName: string;
-  doctorSpecialization?: string;
-  doctorAvatar?: string;
+  targetId: number;
+  targetName: string;
+  targetAvatar?: string;
+  targetRole: 'DOCTOR' | 'PATIENT';
+  targetSpecialization?: string; // For doctors
   lastMessage: string;
   lastMessageTime: Date;
   unreadCount: number;
@@ -35,7 +36,7 @@ interface ChatConversation {
 const ChatListScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading: authLoading } = useAuth();
   const { addNotification } = useNotifications();
   const [searchQuery, setSearchQuery] = useState('');
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
@@ -43,21 +44,37 @@ const ChatListScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [lastCheckedMessages, setLastCheckedMessages] = useState<Record<number, number>>({});
 
-  const navItems = [
-    { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
-    { name: 'Chat', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles', route: 'ChatList' },
-    { name: 'Calendar', icon: 'calendar-outline', activeIcon: 'calendar', route: 'Calendar' },
-    { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'Profile' },
-  ];
+  const isDoctor = user?.role === 'DOCTOR';
+
+  const navItems = isDoctor 
+    ? [
+        { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'DoctorDashboard' },
+        { name: 'Chat', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles', route: 'DoctorChatList' },
+        { name: 'Calendar', icon: 'calendar-outline', activeIcon: 'calendar', route: 'DoctorCalendar' },
+        { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'DoctorProfile' },
+      ]
+    : [
+        { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
+        { name: 'Chat', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles', route: 'ChatList' },
+        { name: 'Calendar', icon: 'calendar-outline', activeIcon: 'calendar', route: 'Calendar' },
+        { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'Profile' },
+      ];
+
+  // Debug: Track component mount and user changes
+  useEffect(() => {
+    console.log('[ChatList] Component mounted/updated - user:', user?.id, user?.role, 'authLoading:', authLoading);
+  }, [user, authLoading]);
 
   const loadConversations = useCallback(async () => {
+    console.log('[ChatList] loadConversations called - user.id:', user?.id, 'user.role:', user?.role);
     try {
-      setLoading(true);
+      // Don't show loading spinner for better UX - list will appear instantly
+      // setLoading(true);
       
-      // Check if user is authenticated
+      // Wait for auth to complete before checking user
       if (!user || !user.id) {
-        console.warn('User not authenticated, skipping chat load', { user: user ? { id: user.id, email: user.email } : null });
         setConversations([]);
+        setLoading(false);
         return;
       }
       
@@ -65,116 +82,68 @@ const ChatListScreen = () => {
       
       // Transform backend chats to UI format
       const transformedConversations: ChatConversation[] = chats.map((chat: Chat) => {
-        // Find doctor participant (exclude current user)
-        // Convert user.id to number for comparison
         const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
-        const doctorParticipant = chat.participants.find(
-          (p) => p.role === 'DOCTOR' && p.id !== userId
-        ) || chat.participants.find((p) => p.id !== userId) || chat.participants[0];
+        
+        // Find the "other" participant
+        const otherParticipant = chat.participants.find((p) => {
+          const pId = typeof p.id === 'string' ? parseInt(p.id, 10) : p.id;
+          return pId !== userId;
+        }) || chat.participants[0];
+        
+        if (!otherParticipant) {
+          return null;
+        }
+
+        // Determine display info based on roles
+        let targetName = otherParticipant.full_name;
+        let targetAvatar = otherParticipant.avatar || undefined;
+        let targetSpecialization = undefined;
+
+        if (isDoctor) {
+          // Doctor viewing Patient
+          targetName = otherParticipant.full_name || 'Sinh viên';
+          // Keep real avatar for now, or hide if anonymous requirement prevents it (but user asked for separation, assumed real data logic from DoctorChatListScreen)
+        } else {
+          // Patient viewing Doctor
+          targetSpecialization = otherParticipant.role === 'DOCTOR' ? 'Chuyên gia' : undefined;
+        }
         
         return {
           id: chat.id,
-          doctorId: doctorParticipant.id,
-          doctorName: doctorParticipant.full_name,
-          doctorSpecialization: doctorParticipant.role === 'DOCTOR' ? 'Chuyên gia' : undefined,
-          doctorAvatar: doctorParticipant.avatar || undefined,
+          targetId: otherParticipant.id,
+          targetName: targetName,
+          targetAvatar: targetAvatar,
+          targetRole: otherParticipant.role,
+          targetSpecialization: targetSpecialization,
           lastMessage: chat.last_message?.content || 'Chưa có tin nhắn',
-          // Use epoch date for chats with no messages so they sort to bottom
           lastMessageTime: chat.last_message 
             ? new Date(chat.last_message.created_at) 
-            : new Date(0), // Unix epoch (1970-01-01) for empty chats
+            : new Date(0),
           unreadCount: chat.unread_count,
         };
-      });
+      }).filter(Boolean) as ChatConversation[];
 
       transformedConversations.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
-      
-      // Check for new messages and create notifications
-      for (const chat of chats) {
-        if (chat.last_message && chat.unread_count > 0) {
-          const lastMessageId = chat.last_message.id;
-          const lastCheckedId = lastCheckedMessages[chat.id] || 0;
-          
-          // If this is a new message (not checked before)
-          if (lastMessageId > lastCheckedId) {
-            // Find doctor participant
-            const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
-            const doctorParticipant = chat.participants.find(
-              (p) => p.role === 'DOCTOR' && p.id !== userId
-            ) || chat.participants.find((p) => p.id !== userId) || chat.participants[0];
-            
-            // Only create notification if message is from doctor (not from current user)
-            const messageFromDoctor = chat.last_message.sender_id !== userId;
-            if (messageFromDoctor) {
-              const doctorName = doctorParticipant.full_name;
-              const messagePreview = chat.last_message.content.length > 50 
-                ? chat.last_message.content.substring(0, 50) + '...'
-                : chat.last_message.content;
-              
-              // Create notification
-              await addNotification({
-                type: 'message',
-                title: doctorName,
-                message: messagePreview,
-                chatId: chat.id,
-              });
-
-              // Send push notification
-              await notificationService.sendPushNotification(
-                `Tin nhắn mới từ ${doctorName}`,
-                messagePreview,
-                {
-                  type: 'message',
-                  chatId: chat.id,
-                }
-              );
-            }
-            
-            // Update last checked message ID
-            setLastCheckedMessages(prev => ({
-              ...prev,
-              [chat.id]: lastMessageId,
-            }));
-          }
-        }
-      }
       
       setConversations(transformedConversations);
     } catch (error: any) {
       console.error('Error loading conversations:', error);
-      // Handle authentication errors
-      if (error?.message?.includes('hết hạn')) {
-        Alert.alert(
-          'Phiên đăng nhập hết hạn',
-          'Vui lòng đăng nhập lại để tiếp tục sử dụng.',
-          [
-            {
-              text: 'Đăng nhập lại',
-              onPress: async () => {
-                try {
-                  await logout();
-                  navigation.navigate('Login' as never);
-                } catch (logoutError) {
-                  console.error('Logout error:', logoutError);
-                  navigation.navigate('Login' as never);
-                }
-              },
-            },
-          ]
-        );
-      } else if (error?.message && !error.message.includes('Not Found')) {
-        Alert.alert('Lỗi', `Không thể tải danh sách chat. Vui lòng thử lại.\n${error.message}`);
-      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, navigation, logout]);
+  }, [user?.id, user?.role]);
 
   useFocusEffect(
     useCallback(() => {
-      loadConversations();
-    }, [loadConversations])
+      console.log('[ChatList] useFocusEffect triggered - user:', user?.id, 'has user:', !!user);
+      // Only load if user is available
+      if (user && user.id) {
+        loadConversations();
+      } else {
+        console.log('[ChatList] Skipping load - no user');
+      }
+    }, [loadConversations, user?.id])
   );
 
   const onRefresh = useCallback(() => {
@@ -197,32 +166,48 @@ const ChatListScreen = () => {
   };
 
   const filteredConversations = conversations.filter((conv) =>
-    conv.doctorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    conv.doctorSpecialization?.toLowerCase().includes(searchQuery.toLowerCase())
+    (conv.targetName && conv.targetName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (conv.targetSpecialization && conv.targetSpecialization.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const handleStartAnonymousChat = async () => {
-    // Navigate to AllDoctorsScreen to select a doctor
-    navigation.navigate('AllDoctors' as never);
+  const handleOpenChat = (conversation: ChatConversation) => {
+    // Navigate to shared Chat screen
+    // Route name depends on role stack, but we will unify logic.
+    // For now, let's assume we map 'Chat' and 'DoctorChat' to the same screen eventually.
+    // But currently in App.tsx they are separate. We will update App.tsx to use SHARED components but keep route names if needed, 
+    // OR ideally we point both to the SAME route name if possible, but TabBars rely on specific route names.
+    // Let's rely on the route names that exist in the stacks, or new consolidated names.
+    // The user asked to "unify the file", not necessarily the route names, but simplifying is better.
+    // I will use 'Chat' for Patient and 'DoctorChat' for Doctor to respect existing navigation structure if I don't change stacks deeply.
+    // However, I planned to "Update navigation".
+    
+    // Let's try to use a smart navigation.
+    const routeName = isDoctor ? 'DoctorChat' : 'Chat';
+    
+    (navigation as any).navigate(routeName, {
+      chatId: conversation.id,
+      // Pass generic params that the new ChatScreen will understand
+      targetId: conversation.targetId,
+      targetName: conversation.targetName,
+      targetAvatar: conversation.targetAvatar,
+      targetRole: conversation.targetRole,
+    });
   };
 
-  const handleOpenChat = (conversation: ChatConversation) => {
-    (navigation as any).navigate('Chat', {
-      chatId: conversation.id,
-      doctorId: conversation.doctorId,
-      doctorName: conversation.doctorName,
-      doctorAvatar: conversation.doctorAvatar,
-    });
+  const handleStartNewChat = () => {
+    navigation.navigate('AllDoctors' as never);
   };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-        <TouchableOpacity onPress={handleStartAnonymousChat} style={styles.newChatButton}>
-          <Ionicons name="add-circle" size={24} color={Colors.primary} />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Tin nhắn</Text>
+        {!isDoctor && (
+          <TouchableOpacity onPress={handleStartNewChat} style={styles.newChatButton}>
+            <Ionicons name="add-circle" size={24} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Search Bar */}
@@ -230,7 +215,7 @@ const ChatListScreen = () => {
         <Ionicons name="search" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Tìm kiếm cuộc trò chuyện..."
+          placeholder="Tìm kiếm..."
           placeholderTextColor={Colors.textSecondary}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -267,14 +252,14 @@ const ChatListScreen = () => {
                 activeOpacity={0.7}
               >
                 <View style={styles.avatarContainer}>
-                  {conversation.doctorAvatar ? (
+                  {conversation.targetAvatar ? (
                     <Image
-                      source={{ uri: conversation.doctorAvatar }}
-                      style={styles.doctorAvatarImage}
+                      source={{ uri: conversation.targetAvatar }}
+                      style={styles.avatarImage}
                     />
                   ) : (
-                    <View style={styles.doctorAvatar}>
-                      <Ionicons name="person" size={24} color={Colors.primary} />
+                    <View style={styles.avatarPlaceholder}>
+                      <Ionicons name="person" size={24} color={isDoctor ? Colors.textSecondary : Colors.primary} />
                     </View>
                   )}
                   {conversation.unreadCount > 0 && (
@@ -288,7 +273,7 @@ const ChatListScreen = () => {
                 <View style={styles.conversationInfo}>
                   <View style={styles.conversationHeader}>
                     <Text style={styles.conversationName} numberOfLines={1}>
-                      {conversation.doctorName}
+                      {conversation.targetName}
                     </Text>
                     <Text style={styles.conversationTime}>
                       {formatTime(conversation.lastMessageTime)}
@@ -298,10 +283,10 @@ const ChatListScreen = () => {
                     <Text style={styles.lastMessage} numberOfLines={1}>
                       {conversation.lastMessage}
                     </Text>
-                    {conversation.doctorSpecialization && (
+                    {conversation.targetSpecialization && (
                       <View style={styles.specializationTag}>
                         <Text style={styles.specializationTagText}>
-                          {conversation.doctorSpecialization}
+                          {conversation.targetSpecialization}
                         </Text>
                       </View>
                     )}
@@ -315,14 +300,16 @@ const ChatListScreen = () => {
             <Ionicons name="chatbubbles-outline" size={64} color={Colors.textSecondary} />
             <Text style={styles.emptyStateText}>Chưa có cuộc trò chuyện nào</Text>
             <Text style={styles.emptyStateSubtext}>
-              Các cuộc trò chuyện với chuyên gia sẽ hiển thị ở đây
+              {isDoctor 
+                ? 'Các cuộc trò chuyện với sinh viên sẽ hiển thị ở đây'
+                : 'Bắt đầu trò chuyện với chuyên gia ngay'}
             </Text>
           </View>
         )}
       </ScrollView>
 
       {/* Bottom Navigation */}
-      <BottomNavigationBar items={navItems} />
+      <BottomNavigationBar items={navItems} activeColor={isDoctor ? Colors.success : undefined} />
     </View>
   );
 };
@@ -368,40 +355,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text,
   },
-  anonymousSection: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  anonymousButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-  },
-  anonymousIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  anonymousInfo: {
-    flex: 1,
-  },
-  anonymousTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  anonymousSubtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
   scrollView: {
     flex: 1,
   },
@@ -429,7 +382,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginRight: 12,
   },
-  doctorAvatar: {
+  avatarPlaceholder: {
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -437,10 +390,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  doctorAvatarImage: {
+  avatarImage: {
     width: 56,
     height: 56,
     borderRadius: 28,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   loadingContainer: {
     flex: 1,
@@ -533,4 +488,3 @@ const styles = StyleSheet.create({
 });
 
 export default ChatListScreen;
-

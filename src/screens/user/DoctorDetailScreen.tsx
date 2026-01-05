@@ -77,8 +77,10 @@ const DoctorDetailScreen = () => {
       const chat = await chatService.createChat(doctor.id);
       (navigation as any).navigate('Chat', {
         chatId: chat.id,
-        doctorId: doctor.id,
-        doctorName: doctor.full_name,
+        targetId: doctor.id,
+        targetName: doctor.full_name,
+        targetAvatar: doctor.avatar || undefined,
+        targetRole: 'DOCTOR',
       });
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể tạo chat');

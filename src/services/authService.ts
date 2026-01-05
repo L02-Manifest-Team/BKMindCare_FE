@@ -98,9 +98,13 @@ export const authService = {
   // Logout user
   logout: async (): Promise<void> => {
     try {
+      console.log('[AuthService] Logging out and clearing all auth data...');
+      // Remove all auth-related data
       await removeAuthToken();
+      await AsyncStorage.removeItem('refreshToken');
       await AsyncStorage.removeItem('userRole');
       await AsyncStorage.removeItem('userId');
+      console.log('[AuthService] Logout complete');
     } catch (error) {
       console.error('Logout error:', error);
       throw error;

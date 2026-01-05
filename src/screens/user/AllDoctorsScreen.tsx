@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,11 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { doctorService, DoctorProfile } from '../../services/doctorService';
 import { chatService } from '../../services/chatService';
-import { useAuth } from '../../context/AuthContext';
 
 const AllDoctorsScreen = () => {
   const navigation = useNavigation();
-  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [doctors, setDoctors] = useState<DoctorProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +29,7 @@ const AllDoctorsScreen = () => {
       setDoctors(response.data || []);
     } catch (error: any) {
       console.error('Error loading doctors:', error);
-      Alert.alert('Lỗi', `Không thể tải danh sách bác sĩ. Vui lòng thử lại.\n${error.message}`);
+      Alert.alert('Lỗi', `Không thể tải danh sách bác sĩ. Vui lòng thử lại.\n${error?.message || 'Có lỗi xảy ra'}`);
     } finally {
       setLoading(false);
     }
@@ -56,15 +54,16 @@ const AllDoctorsScreen = () => {
               try {
                 const chat = await chatService.createChat(doctor.id);
                 // Navigate to chat screen
-                navigation.navigate('Chat' as never, {
+                (navigation as any).navigate('Chat', {
                   chatId: chat.id,
-                  doctorId: doctor.id,
-                  doctorName: doctor.full_name,
-                  doctorAvatar: doctor.avatar || undefined,
-                } as any);
+                  targetId: doctor.id,
+                  targetName: doctor.full_name,
+                  targetAvatar: doctor.avatar || undefined,
+                  targetRole: 'DOCTOR',
+                });
               } catch (error: any) {
                 console.error('Error creating chat:', error);
-                Alert.alert('Lỗi', `Không thể tạo chat. Vui lòng thử lại.\n${error.message}`);
+                Alert.alert('Lỗi', `Không thể tạo chat. Vui lòng thử lại.\n${error?.message || 'Có lỗi xảy ra'}`);
               }
             },
           },
@@ -72,7 +71,7 @@ const AllDoctorsScreen = () => {
       );
     } catch (error: any) {
       console.error('Error starting chat:', error);
-      Alert.alert('Lỗi', `Không thể bắt đầu chat. Vui lòng thử lại.\n${error.message}`);
+      Alert.alert('Lỗi', `Không thể bắt đầu chat. Vui lòng thử lại.\n${error?.message || 'Có lỗi xảy ra'}`);
     }
   };
 
@@ -146,7 +145,7 @@ const AllDoctorsScreen = () => {
                     <View style={styles.doctorActions}>
                       <TouchableOpacity
                         style={styles.viewButton}
-                        onPress={() => navigation.navigate('DoctorDetail' as never, { doctorId: doctor.id } as never)}
+                        onPress={() => (navigation as any).navigate('DoctorDetail', { doctorId: doctor.id })}
                       >
                         <Text style={styles.viewButtonText}>Xem hồ sơ</Text>
                       </TouchableOpacity>

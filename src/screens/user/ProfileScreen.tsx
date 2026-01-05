@@ -5,11 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
   Image,
+  ActivityIndicator, // Keep ActivityIndicator as it's used later in the code
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native'; // Keep useFocusEffect as it's used later in the code
 import { useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -51,7 +51,13 @@ const ProfileScreen = () => {
           onPress: async () => {
             try {
               await logout();
-              navigation.navigate('Login' as never);
+              // Reset navigation stack to prevent going back
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                })
+              );
             } catch (error) {
               Alert.alert('Lỗi', 'Không thể đăng xuất. Vui lòng thử lại.');
             }
@@ -64,43 +70,43 @@ const ProfileScreen = () => {
   const menuItems = [
     {
       id: '1',
-      title: 'Edit Profile',
+      title: 'Chỉnh sửa hồ sơ',
       icon: 'person-outline',
       onPress: () => navigation.navigate('EditProfile' as never),
     },
     {
       id: '2',
-      title: 'Appointment History',
+      title: 'Lịch sử hẹn',
       icon: 'calendar-outline',
       onPress: () => navigation.navigate('AppointmentHistory' as never),
     },
     {
       id: '3',
-      title: 'Mood History',
+      title: 'Lịch sử cảm xúc',
       icon: 'heart-outline',
       onPress: () => navigation.navigate('MoodHistory' as never),
     },
     {
       id: '4',
-      title: 'Settings',
+      title: 'Cài đặt',
       icon: 'settings-outline',
       onPress: () => navigation.navigate('Settings' as never),
     },
     {
       id: '5',
-      title: 'Help & Support',
+      title: 'Trợ giúp & Hỗ trợ',
       icon: 'help-circle-outline',
       onPress: () => navigation.navigate('FAQ' as never),
     },
     {
       id: '6',
-      title: 'About',
+      title: 'Giới thiệu',
       icon: 'information-circle-outline',
       onPress: () => navigation.navigate('About' as never),
     },
     {
       id: '7',
-      title: 'Logout',
+      title: 'Đăng xuất',
       icon: 'log-out-outline',
       onPress: handleLogout,
       color: Colors.error,
@@ -147,17 +153,17 @@ const ProfileScreen = () => {
               <View style={styles.statsSection}>
                 <View style={styles.statItem}>
                   <Text style={styles.statNumber}>-</Text>
-                  <Text style={styles.statLabel}>Appointments</Text>
+                  <Text style={styles.statLabel}>Lịch hẹn</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
                   <Text style={styles.statNumber}>-</Text>
-                  <Text style={styles.statLabel}>Mood Check-ins</Text>
+                  <Text style={styles.statLabel}>Ghi nhận cảm xúc</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
                   <Text style={styles.statNumber}>-</Text>
-                  <Text style={styles.statLabel}>Tests Taken</Text>
+                  <Text style={styles.statLabel}>Bài kiểm tra</Text>
                 </View>
               </View>
 

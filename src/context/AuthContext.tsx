@@ -31,15 +31,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check if user is authenticated on app load
+  // Debug: Track user state changes
   useEffect(() => {
-    checkAuth();
+    console.log('[AuthContext] User state changed:', user ? `ID=${user.id}, Role=${user.role}` : 'null');
+  }, [user]);
+
+  // Disable auto-login (remember me) - user must login every time
+  useEffect(() => {
+    setIsLoading(false);
   }, []);
 
   const checkAuth = async () => {
     try {
+      console.log('[AuthContext] Starting auth check...');
       const token = await AsyncStorage.getItem('accessToken');
       const refreshToken = await AsyncStorage.getItem('refreshToken');
+      
+      console.log('[AuthContext] Token exists:', !!token);
+      console.log('[AuthContext] Refresh token exists:', !!refreshToken);
       
       if (token) {
         // If we have access token but no refresh token, it's an old session
@@ -55,32 +64,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
         
         try {
+          console.log('[AuthContext] Fetching current user...');
           const userProfile = await authService.getCurrentUser();
+          console.log('[AuthContext] User profile loaded:', { id: userProfile.id, role: userProfile.role, name: userProfile.full_name });
           setUser(userProfile);
           setIsAuthenticated(true);
         } catch (error: any) {
           console.error('[AuthContext] Get current user error:', error);
-          // If getCurrentUser fails, try to refresh token
-          if (refreshToken) {
-            try {
-              await authService.refreshToken();
-              const userProfile = await authService.getCurrentUser();
-              setUser(userProfile);
-              setIsAuthenticated(true);
-            } catch (refreshError) {
-              console.error('[AuthContext] Token refresh failed during auth check:', refreshError);
-              await authService.logout();
-              setUser(null);
-              setIsAuthenticated(false);
-            }
-          } else {
-            // No refresh token available, logout
-            console.warn('[AuthContext] Token invalid and no refresh token available. Logging out.');
-            await authService.logout();
-            setUser(null);
-            setIsAuthenticated(false);
-          }
+          console.error('[AuthContext] Error details:', error.response?.data || error.message);
+          
+          // Token invalid, clear everything and require re-login
+          console.warn('[AuthContext] Token invalid, clearing session');
+          await authService.logout();
+          setUser(null);
+          setIsAuthenticated(false);
         }
+      } else {
+        console.log('[AuthContext] No token found, user not authenticated');
       }
     } catch (error) {
       console.error('[AuthContext] Auth check error:', error);
@@ -89,6 +89,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
       setIsAuthenticated(false);
     } finally {
+      console.log('[AuthContext] Auth check complete. User:', user ? 'loaded' : 'null');
       setIsLoading(false);
     }
   };
@@ -117,10 +118,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
-      await authService.logout();
+      console.log('[AuthContext] Logging out...');
+      // Clear state immediately for instant UI update
       setUser(null);
       setIsAuthenticated(false);
+      
+      // Then clear storage
+      await authService.logout();
+      console.log('[AuthContext] Logout complete');
     } catch (error) {
+      console.error('[AuthContext] Logout error:', error);
+      // Even if logout fails, keep user cleared
+      setUser(null);
+      setIsAuthenticated(false);
       throw error;
     }
   };

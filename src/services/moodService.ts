@@ -63,7 +63,8 @@ export const moodService = {
       return response;
     } catch (error) {
       console.error('Get latest mood error:', error);
-      throw error;
+      // Return null instead of throwing - doctors don't have mood data
+      return null;
     }
   },
 

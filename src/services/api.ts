@@ -56,6 +56,14 @@ export const apiRequest = async <T>(
     },
   };
 
+  // Log API request details for debugging
+  console.log('[API] Request:', {
+    endpoint,
+    method: options.method || 'GET',
+    hasToken: !!token,
+    tokenPreview: token ? `${token.substring(0, 15)}...${token.substring(token.length - 10)}` : 'none',
+  });
+
   // Create timeout promise
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => {
@@ -137,13 +145,27 @@ export const apiRequest = async <T>(
               throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
             }
           } else {
-            // For auth endpoints or already retried, just clear token
+            // For login specifically, pass through the server error (incorrect password, etc.)
+            if (endpoint.includes('/auth/login')) {
+              throw new Error(data.detail || 'Đăng nhập thất bại');
+            }
+
+            // For other endpoints or already retried, just clear token and say session expired
             await removeAuthToken();
             throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
           }
         }
         throw new Error(data.detail || `Lỗi server: ${response.status}`);
       }
+      
+      // Log successful response for debugging
+      console.log('[API] Response:', {
+        endpoint,
+        status: response.status,
+        dataPreview: typeof data === 'object' ? 
+          (Array.isArray(data) ? `Array(${data.length})` : `Object with ${Object.keys(data).length} keys`) : 
+          typeof data,
+      });
       
       return data as T;
     } else {

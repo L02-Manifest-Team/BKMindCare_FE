@@ -24,7 +24,7 @@ const DoctorDashboard = () => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
-  const [todayAppointments, setTodayAppointments] = useState<AppointmentWithRelations[]>([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState<AppointmentWithRelations[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,28 +42,34 @@ const DoctorDashboard = () => {
     return 'Chào buổi tối';
   };
 
-  // Load today's appointments
-  const loadTodayAppointments = useCallback(async () => {
+  // Load upcoming appointments (from today onwards)
+  const loadUpcomingAppointments = useCallback(async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const response = await appointmentService.getAppointments({
         start_date: today,
-        end_date: today,
+        // No end_date to get future appointments
         limit: 10,
       });
       
-      // Filter for today and sort by time
-      const todayApts = response.data
-        .filter(apt => apt.appointment_date === today)
+      // Filter for future appointments (including today) and sort by date and time
+      const upcomingApts = response.data
+        .filter(apt => apt.appointment_date >= today && apt.status !== 'CANCELLED')
         .sort((a, b) => {
+          // Sort by date first
+          if (a.appointment_date !== b.appointment_date) {
+            return a.appointment_date.localeCompare(b.appointment_date);
+          }
+          // Then by time
           const timeA = a.time_slot.split(':').map(Number);
           const timeB = b.time_slot.split(':').map(Number);
           return timeA[0] * 60 + timeA[1] - (timeB[0] * 60 + timeB[1]);
-        });
+        })
+        .slice(0, 3); // Limit to 3 items for dashboard
       
-      setTodayAppointments(todayApts);
+      setUpcomingAppointments(upcomingApts);
     } catch (error) {
-      console.error('Error loading today appointments:', error);
+      console.error('Error loading upcoming appointments:', error);
     }
   }, []);
 
@@ -94,7 +100,7 @@ const DoctorDashboard = () => {
         totalPatients: uniquePatients.size,
         totalAppointments: allAppointments.length,
         totalMessages,
-        rating: user?.doctor_profile?.rating || 5.0,
+        rating: 5.0, // Default rating as it's not in UserProfile
       });
     } catch (error) {
       console.error('Error loading statistics:', error);
@@ -106,7 +112,7 @@ const DoctorDashboard = () => {
     try {
       setLoading(true);
       await Promise.all([
-        loadTodayAppointments(),
+        loadUpcomingAppointments(),
         loadStatistics(),
       ]);
     } catch (error) {
@@ -115,7 +121,7 @@ const DoctorDashboard = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadTodayAppointments, loadStatistics]);
+  }, [loadUpcomingAppointments, loadStatistics]);
 
   useFocusEffect(
     useCallback(() => {
@@ -132,12 +138,17 @@ const DoctorDashboard = () => {
     return timeSlot;
   };
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return `${date.getDate()}/${date.getMonth() + 1}`;
+  };
+
   const getAppointmentType = (notes: string | null) => {
-    if (!notes) return 'video-call';
+    if (!notes) return 'Gọi video';
     if (notes.includes('Cơ sở 1') || notes.includes('Cơ sở 2')) {
-      return 'in-person';
+      return 'Trực tiếp';
     }
-    return 'video-call';
+    return 'Gọi video';
   };
 
   const getAppointmentLocation = (notes: string | null) => {
@@ -207,7 +218,7 @@ const DoctorDashboard = () => {
           <View style={styles.doctorInfo}>
             <Text style={styles.doctorName}>{user?.full_name || 'Bác sĩ'}</Text>
             <Text style={styles.doctorSpecialty}>
-              {user?.doctor_profile?.specialization || 'Psychologist'}
+              {user?.specialization || 'Psychologist'}
             </Text>
             <View style={styles.ratingContainer}>
               {[1, 2, 3, 4, 5].map((i) => (
@@ -231,7 +242,7 @@ const DoctorDashboard = () => {
           >
             <Ionicons name="people" size={32} color={Colors.purple} />
             <Text style={styles.metricNumber}>{statistics.totalPatients}</Text>
-            <Text style={styles.metricLabel}>patient</Text>
+            <Text style={styles.metricLabel}>Bệnh nhân</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.metricCard, { backgroundColor: Colors.greenLight }]}
@@ -240,7 +251,7 @@ const DoctorDashboard = () => {
           >
             <Ionicons name="calendar" size={32} color={Colors.success} />
             <Text style={styles.metricNumber}>{statistics.totalAppointments}</Text>
-            <Text style={styles.metricLabel}>appointment</Text>
+            <Text style={styles.metricLabel}>Cuộc hẹn</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.metricCard, { backgroundColor: Colors.purpleLight }]}
@@ -249,7 +260,7 @@ const DoctorDashboard = () => {
           >
             <Ionicons name="chatbubbles" size={32} color={Colors.purple} />
             <Text style={styles.metricNumber}>{statistics.totalMessages}</Text>
-            <Text style={styles.metricLabel}>message</Text>
+            <Text style={styles.metricLabel}>Tin nhắn</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.metricCard, { backgroundColor: Colors.blueLight }]}
@@ -258,7 +269,7 @@ const DoctorDashboard = () => {
           >
             <Ionicons name="star" size={32} color={Colors.warning} />
             <Text style={styles.metricNumber}>{statistics.rating.toFixed(1)}</Text>
-            <Text style={styles.metricLabel}>rating</Text>
+            <Text style={styles.metricLabel}>Đánh giá</Text>
           </TouchableOpacity>
         </View>
 
@@ -282,20 +293,20 @@ const DoctorDashboard = () => {
           </View>
         )}
 
-        {/* Today's Appointments */}
+        {/* Upcoming Appointments */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's appointment</Text>
+            <Text style={styles.sectionTitle}>Cuộc hẹn sắp tới</Text>
             <TouchableOpacity onPress={() => navigation.navigate('DoctorCalendar' as never)}>
-              <Text style={styles.viewAllText}>View all →</Text>
+              <Text style={styles.viewAllText}>Xem tất cả →</Text>
             </TouchableOpacity>
           </View>
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={Colors.primary} />
             </View>
-          ) : todayAppointments.length > 0 ? (
-            todayAppointments.map((appointment) => {
+          ) : upcomingAppointments.length > 0 ? (
+            upcomingAppointments.map((appointment) => {
               const appointmentType = getAppointmentType(appointment.notes);
               const location = getAppointmentLocation(appointment.notes);
               return (
@@ -306,13 +317,16 @@ const DoctorDashboard = () => {
                     appointmentId: appointment.id,
                   })}
                 >
-                  <Text style={styles.appointmentTime}>{formatTime(appointment.time_slot)}</Text>
+                  <View style={styles.appointmentTimeContainer}>
+                    <Text style={styles.appointmentDate}>{formatDate(appointment.appointment_date)}</Text>
+                    <Text style={styles.appointmentTime}>{formatTime(appointment.time_slot)}</Text>
+                  </View>
                   <View style={styles.appointmentInfo}>
                     <Text style={styles.appointmentPatient}>
                       {appointment.patient?.full_name || 'Bệnh nhân'}
                     </Text>
                     <Text style={styles.appointmentDetail}>
-                      {appointmentType === 'in-person' ? 'In-person' : 'Video call'}, {location || 'Online'}
+                      {appointmentType === 'Trực tiếp' ? 'Trực tiếp' : 'Gọi video'}, {location || 'Online'}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
@@ -321,7 +335,7 @@ const DoctorDashboard = () => {
             })
           ) : (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Không có lịch hẹn hôm nay</Text>
+              <Text style={styles.emptyText}>Không có cuộc hẹn sắp tới</Text>
             </View>
           )}
         </View>
@@ -527,12 +541,20 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
+  appointmentTimeContainer: {
+    marginRight: 16,
+    alignItems: 'center',
+    minWidth: 60,
+  },
+  appointmentDate: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
   appointmentTime: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.text,
-    marginRight: 16,
-    minWidth: 60,
   },
   appointmentInfo: {
     flex: 1,

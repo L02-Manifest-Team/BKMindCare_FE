@@ -9,7 +9,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, CommonActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -59,7 +59,13 @@ const DoctorProfileScreen = () => {
           onPress: async () => {
             try {
               await logout();
-              navigation.navigate('Login' as never);
+              // Reset navigation stack to prevent going back
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                })
+              );
             } catch (error) {
               Alert.alert('Lỗi', 'Không thể đăng xuất. Vui lòng thử lại.');
             }
@@ -72,37 +78,37 @@ const DoctorProfileScreen = () => {
   const menuItems = [
     {
       id: '1',
-      title: 'Edit Profile',
+      title: 'Chỉnh sửa hồ sơ',
       icon: 'person-outline',
       onPress: () => navigation.navigate('DoctorEditProfile' as never),
     },
     {
       id: '2',
-      title: 'Appointment History',
+      title: 'Lịch sử hẹn',
       icon: 'calendar-outline',
       onPress: () => navigation.navigate('DoctorAppointmentHistory' as never),
     },
     {
       id: '3',
-      title: 'Settings',
+      title: 'Cài đặt',
       icon: 'settings-outline',
       onPress: () => navigation.navigate('DoctorSettings' as never),
     },
     {
       id: '4',
-      title: 'Help & Support',
+      title: 'Trợ giúp & Hỗ trợ',
       icon: 'help-circle-outline',
       onPress: () => navigation.navigate('DoctorHelpSupport' as never),
     },
     {
       id: '5',
-      title: 'About',
+      title: 'Giới thiệu',
       icon: 'information-circle-outline',
       onPress: () => navigation.navigate('DoctorAbout' as never),
     },
     {
       id: '6',
-      title: 'Logout',
+      title: 'Đăng xuất',
       icon: 'log-out-outline',
       onPress: handleLogout,
       color: Colors.error,
@@ -152,17 +158,17 @@ const DoctorProfileScreen = () => {
               <View style={styles.statsSection}>
                 <View style={styles.statItem}>
                   <Text style={styles.statNumber}>-</Text>
-                  <Text style={styles.statLabel}>Patients</Text>
+                  <Text style={styles.statLabel}>Bệnh nhân</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
                   <Text style={styles.statNumber}>-</Text>
-                  <Text style={styles.statLabel}>Appointments</Text>
+                  <Text style={styles.statLabel}>Lịch hẹn</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
                   <Text style={styles.statNumber}>-</Text>
-                  <Text style={styles.statLabel}>Rating</Text>
+                  <Text style={styles.statLabel}>Đánh giá</Text>
                 </View>
               </View>
 
