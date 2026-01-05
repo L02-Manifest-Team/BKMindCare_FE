@@ -6,7 +6,8 @@ export { API_URL };
 // Helper function to get auth token
 export const getAuthToken = async (): Promise<string | null> => {
   try {
-    return await AsyncStorage.getItem('accessToken');
+    const token = await AsyncStorage.getItem('accessToken');
+    return token;
   } catch (error) {
     console.error('Error getting auth token:', error);
     return null;
@@ -70,31 +71,102 @@ export const apiRequest = async <T>(
     
     // Handle non-JSON responses
     const contentType = response.headers.get('content-type');
+    
+    // Handle 204 No Content (e.g., DELETE requests)
+    if (response.status === 204) {
+      return {} as T;
+    }
+    
     if (contentType && contentType.includes('application/json')) {
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        if (__DEV__) {
+          console.error('Failed to parse JSON response:', jsonError);
+        }
+        throw new Error(`Lỗi server: ${response.status} - Không thể parse response`);
+      }
       
       if (!response.ok) {
+        if (__DEV__) {
+          console.error('API Error:', {
+            endpoint,
+            status: response.status,
+            data,
+          });
+        }
+        // Handle authentication errors - try to refresh token
+        if (response.status === 401 || response.status === 403) {
+          const errorMsg = data.detail || 'Not authenticated';
+          
+          // Try to refresh token (only for non-auth endpoints and only once)
+          if (!endpoint.includes('/auth/') && !(options as any)._retryCount) {
+            try {
+              // Get refresh token directly from AsyncStorage to avoid circular dependency
+              const refreshToken = await AsyncStorage.getItem('refreshToken');
+              
+              if (!refreshToken) {
+                throw new Error('No refresh token available');
+              }
+              
+              // Call refresh endpoint directly
+              const refreshResponse = await fetch(`${API_URL}/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: refreshToken }),
+              });
+              
+              if (!refreshResponse.ok) {
+                throw new Error('Refresh failed');
+              }
+              
+              const refreshData = await refreshResponse.json();
+              
+              // Save new tokens
+              await setAuthToken(refreshData.access_token);
+              if (refreshData.refresh_token) {
+                await AsyncStorage.setItem('refreshToken', refreshData.refresh_token);
+              }
+              
+              // Retry original request with new token (mark as retry)
+              return apiRequest<T>(endpoint, { ...options, _retryCount: 1 } as any);
+            } catch (refreshError: any) {
+              // Clear invalid tokens
+              await removeAuthToken();
+              throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+            }
+          } else {
+            // For auth endpoints or already retried, just clear token
+            await removeAuthToken();
+            throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+          }
+        }
         throw new Error(data.detail || `Lỗi server: ${response.status}`);
       }
       
       return data as T;
     } else {
       if (!response.ok) {
+        // Handle authentication errors for non-JSON responses
+        if (response.status === 401 || response.status === 403) {
+          await removeAuthToken();
+          throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        }
         throw new Error(`Lỗi server: ${response.status}`);
       }
       return {} as T;
     }
   } catch (error: any) {
-    console.error('API Request Error:', error);
-    
     // Better error messages
-    if (error.message.includes('Network request failed') || error.message.includes('Failed to fetch')) {
-      throw new Error('Không thể kết nối đến server. Vui lòng kiểm tra:\n1. Backend có đang chạy?\n2. IP address đúng chưa?\n3. Cùng mạng WiFi chưa?');
+    if (error.message && (error.message.includes('Network request failed') || error.message.includes('Failed to fetch'))) {
+      throw new Error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.');
     }
     
     throw error;
   }
 };
+
 
 // API methods
 export const api = {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,23 +6,50 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { mockAppointments, mockDoctors } from '../../constants/data';
-import { Appointment } from '../../types';
+import { appointmentService, AppointmentWithRelations } from '../../services/appointmentService';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
 
 const AppointmentDetailScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const appointmentId = (route.params as any)?.appointmentId as string;
+  const appointmentId = (route.params as any)?.appointmentId as number;
   
-  const appointment = mockAppointments.find((apt) => apt.id === appointmentId) || mockAppointments[0];
-  const doctor = mockDoctors.find((doc) => doc.id === appointment.doctorId) || mockDoctors[0];
+  const [appointment, setAppointment] = useState<AppointmentWithRelations | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadAppointment = useCallback(async () => {
+    if (!appointmentId) {
+      Alert.alert('Lỗi', 'Không tìm thấy ID cuộc hẹn');
+      navigation.goBack();
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const data = await appointmentService.getAppointmentDetail(appointmentId);
+      setAppointment(data);
+    } catch (error: any) {
+      console.error('Error loading appointment:', error);
+      Alert.alert('Lỗi', error.message || 'Không thể tải chi tiết cuộc hẹn');
+      navigation.goBack();
+    } finally {
+      setLoading(false);
+    }
+  }, [appointmentId, navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAppointment();
+    }, [loadAppointment])
+  );
 
   const navItems = [
     { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
@@ -31,43 +58,90 @@ const AppointmentDetailScreen = () => {
     { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'Profile' },
   ];
 
-  const getStatusColor = (status: Appointment['status']) => {
-    switch (status) {
-      case 'confirmed':
+  // Format date from YYYY-MM-DD to "DD MMM YYYY"
+  const formatDate = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${date.getDate()} ${months[date.getMonth()]}, ${date.getFullYear()}`;
+  };
+
+  // Format time from HH:MM to "HH:MM AM/PM"
+  const formatTime = (timeStr: string): string => {
+    const [hours, minutes] = timeStr.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status.toUpperCase()) {
+      case 'CONFIRMED':
         return Colors.success;
-      case 'pending':
-        return Colors.warning;
-      case 'completed':
+      case 'PENDING':
+        return Colors.warning || Colors.textSecondary;
+      case 'COMPLETED':
         return Colors.primary;
-      case 'cancelled':
+      case 'CANCELLED':
+      case 'REJECTED':
         return Colors.error;
       default:
         return Colors.textSecondary;
     }
   };
 
-  const getStatusText = (status: Appointment['status']) => {
-    switch (status) {
-      case 'confirmed':
+  const getStatusText = (status: string) => {
+    switch (status.toUpperCase()) {
+      case 'CONFIRMED':
         return 'Đã xác nhận';
-      case 'pending':
+      case 'PENDING':
         return 'Đang chờ';
-      case 'completed':
+      case 'COMPLETED':
         return 'Đã hoàn thành';
-      case 'cancelled':
+      case 'CANCELLED':
         return 'Đã hủy';
+      case 'REJECTED':
+        return 'Đã từ chối';
       default:
         return status;
     }
   };
 
-  const handleCancel = () => {
-    // TODO: Implement cancel appointment
-    navigation.goBack();
+  const getAppointmentType = (notes?: string): 'video-call' | 'in-person' => {
+    if (notes?.toLowerCase().includes('video')) {
+      return 'video-call';
+    }
+    return 'in-person';
+  };
+
+  const handleCancel = async () => {
+    if (!appointment) return;
+    
+    Alert.alert(
+      'Xác nhận hủy',
+      'Bạn có chắc chắn muốn hủy cuộc hẹn này?',
+      [
+        { text: 'Không', style: 'cancel' },
+        {
+          text: 'Có',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await appointmentService.cancelAppointment(appointment.id);
+              Alert.alert('Thành công', 'Cuộc hẹn đã được hủy');
+              navigation.goBack();
+            } catch (error: any) {
+              Alert.alert('Lỗi', error.message || 'Không thể hủy cuộc hẹn');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleReschedule = () => {
-    navigation.navigate('Appointment' as never, { appointmentId: appointment.id } as any);
+    if (!appointment) return;
+    (navigation as any).navigate('EditAppointment', { appointmentId: appointment.id });
   };
 
   const handleJoinCall = () => {
@@ -86,45 +160,55 @@ const AppointmentDetailScreen = () => {
         <View style={styles.headerPlaceholder} />
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Status Badge */}
-        <View style={styles.statusSection}>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appointment.status) + '20' }]}>
-            <View style={[styles.statusDot, { backgroundColor: getStatusColor(appointment.status) }]} />
-            <Text style={[styles.statusText, { color: getStatusColor(appointment.status) }]}>
-              {getStatusText(appointment.status)}
-            </Text>
-          </View>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Đang tải chi tiết...</Text>
         </View>
-
-        {/* Doctor Info */}
-        <View style={styles.doctorSection}>
-          <View style={styles.doctorAvatarContainer}>
-            {doctor.avatar ? (
-              <Image
-                source={{ uri: doctor.avatar }}
-                style={styles.doctorAvatar}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.doctorAvatarPlaceholder}>
-                <Ionicons name="person" size={40} color={Colors.primary} />
-              </View>
-            )}
-          </View>
-          <View style={styles.doctorInfo}>
-            <Text style={styles.doctorName}>{appointment.doctorName}</Text>
-            <Text style={styles.doctorSpecialization}>{doctor.specialization}</Text>
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={16} color={Colors.warning} />
-              <Text style={styles.rating}>{doctor.rating}</Text>
+      ) : !appointment ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Không tìm thấy cuộc hẹn</Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Status Badge */}
+          <View style={styles.statusSection}>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appointment.status) + '20' }]}>
+              <View style={[styles.statusDot, { backgroundColor: getStatusColor(appointment.status) }]} />
+              <Text style={[styles.statusText, { color: getStatusColor(appointment.status) }]}>
+                {getStatusText(appointment.status)}
+              </Text>
             </View>
           </View>
-        </View>
+
+          {/* Doctor Info */}
+          <View style={styles.doctorSection}>
+            <View style={styles.doctorAvatarContainer}>
+              {appointment.doctor?.avatar ? (
+                <Image
+                  source={{ uri: appointment.doctor.avatar }}
+                  style={styles.doctorAvatar}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.doctorAvatarPlaceholder}>
+                  <Text style={styles.avatarText}>
+                    {appointment.doctor?.full_name?.charAt(0).toUpperCase() || 'D'}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.doctorInfo}>
+              <Text style={styles.doctorName}>{appointment.doctor?.full_name || 'Bác sĩ'}</Text>
+              <Text style={styles.doctorSpecialization}>
+                {appointment.doctor?.doctor_profile?.specialization || 'Bác sĩ tâm lý'}
+              </Text>
+            </View>
+          </View>
 
         {/* Appointment Details */}
         <View style={styles.detailsSection}>
@@ -137,7 +221,7 @@ const AppointmentDetailScreen = () => {
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Ngày</Text>
-              <Text style={styles.detailValue}>{appointment.date}</Text>
+              <Text style={styles.detailValue}>{formatDate(appointment.appointment_date)}</Text>
             </View>
           </View>
 
@@ -148,7 +232,7 @@ const AppointmentDetailScreen = () => {
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Giờ</Text>
-              <Text style={styles.detailValue}>{appointment.time}</Text>
+              <Text style={styles.detailValue}>{formatTime(appointment.time_slot)}</Text>
             </View>
           </View>
 
@@ -167,7 +251,7 @@ const AppointmentDetailScreen = () => {
           <View style={styles.detailItem}>
             <View style={styles.detailIcon}>
               <Ionicons
-                name={appointment.type === 'video-call' ? 'videocam-outline' : 'location-outline'}
+                name={getAppointmentType(appointment.notes || undefined) === 'video-call' ? 'videocam-outline' : 'location-outline'}
                 size={20}
                 color={Colors.primary}
               />
@@ -175,41 +259,39 @@ const AppointmentDetailScreen = () => {
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Loại cuộc hẹn</Text>
               <Text style={styles.detailValue}>
-                {appointment.type === 'video-call' ? 'Video call' : 'Trực tiếp'}
+                {getAppointmentType(appointment.notes || undefined) === 'video-call' ? 'Video call' : 'Trực tiếp'}
               </Text>
             </View>
           </View>
 
-          {/* Location (if in-person) */}
-          {appointment.type === 'in-person' && appointment.location && (
+          {/* Reason */}
+          {appointment.reason && (
             <View style={styles.detailItem}>
               <View style={styles.detailIcon}>
-                <Ionicons name="location-outline" size={20} color={Colors.primary} />
+                <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
               </View>
               <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Địa điểm</Text>
-                <Text style={styles.detailValue}>{appointment.location}</Text>
+                <Text style={styles.detailLabel}>Lý do</Text>
+                <Text style={styles.detailValue}>{appointment.reason}</Text>
               </View>
             </View>
           )}
         </View>
 
         {/* Session Details */}
-        <View style={styles.sessionSection}>
-          <Text style={styles.sectionTitle}>Chi tiết phiên tư vấn</Text>
-          <View style={styles.sessionCard}>
-            <Text style={styles.sessionText}>Session detail chat</Text>
-            <Text style={styles.sessionDescription}>
-              Cuộc tư vấn tâm lý về các vấn đề học tập và cuộc sống. 
-              Bạn có thể chia sẻ bất kỳ điều gì bạn đang gặp phải.
-            </Text>
+        {appointment.notes && (
+          <View style={styles.sessionSection}>
+            <Text style={styles.sectionTitle}>Ghi chú</Text>
+            <View style={styles.sessionCard}>
+              <Text style={styles.sessionDescription}>{appointment.notes}</Text>
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Actions */}
-        {appointment.status === 'confirmed' && (
+        {(appointment.status === 'CONFIRMED' || appointment.status === 'PENDING') && (
           <View style={styles.actionsSection}>
-            {appointment.type === 'video-call' && (
+            {getAppointmentType(appointment.notes || undefined) === 'video-call' && appointment.status === 'CONFIRMED' && (
               <TouchableOpacity
                 style={[styles.actionButton, styles.joinButton]}
                 onPress={handleJoinCall}
@@ -234,7 +316,8 @@ const AppointmentDetailScreen = () => {
             </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
+      )}
 
       {/* Bottom Navigation */}
       <BottomNavigationBar items={navItems} />
@@ -443,6 +526,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.error,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: Colors.textSecondary,
+  },
+  avatarText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: Colors.primary,
   },
 });
 

@@ -18,18 +18,22 @@ export interface AuthResponse {
   access_token: string;
   token_type: string;
   refresh_token?: string;
+  // Backend might return refresh_token in response
+  [key: string]: any;
 }
 
 export interface UserProfile {
-  id: string;
+  id: number | string;  // Backend returns int, but we convert to string for consistency
   email: string;
-  fullName: string;
-  phoneNumber: string;
+  full_name: string;  // Backend uses snake_case
+  phone_number: string | null;  // Backend uses snake_case
   avatar: string | null;
   role: 'PATIENT' | 'DOCTOR';
-  specialization?: string;
-  bio?: string;
-  createdAt: string;
+  specialization?: string | null;
+  bio?: string | null;
+  created_at: string;  // Backend uses snake_case
+  is_active?: boolean;
+  updated_at?: string;
 }
 
 export const authService = {
@@ -65,11 +69,19 @@ export const authService = {
     try {
       const response = await api.post<AuthResponse>('/auth/login', data);
       
-      // Save tokens
+      
+      // Save access token
       await setAuthToken(response.access_token);
-      if (response.refresh_token) {
-        await AsyncStorage.setItem('refreshToken', response.refresh_token);
+      
+      // Save refresh token
+      const refreshToken = response.refresh_token || 
+                          (response as any).refreshToken || 
+                          (response as any)['refresh_token'];
+      
+      if (refreshToken) {
+        await AsyncStorage.setItem('refreshToken', refreshToken);
       }
+      
       
       // Get user profile
       const userProfile = await api.get<UserProfile>('/auth/me');
@@ -95,11 +107,44 @@ export const authService = {
     }
   },
 
+  // Refresh access token
+  refreshToken: async (): Promise<string> => {
+    try {
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+      
+      const response = await api.post<AuthResponse>('/auth/refresh', {
+        refresh_token: refreshToken,
+      });
+      
+      // Save new tokens
+      await setAuthToken(response.access_token);
+      if (response.refresh_token) {
+        await AsyncStorage.setItem('refreshToken', response.refresh_token);
+      }
+      
+      return response.access_token;
+    } catch (error) {
+      console.error('Refresh token error:', error);
+      // Clear tokens if refresh fails
+      await removeAuthToken();
+      await AsyncStorage.removeItem('refreshToken');
+      throw error;
+    }
+  },
+
   // Get current user profile
   getCurrentUser: async (): Promise<UserProfile> => {
     try {
-      const response = await api.get<UserProfile>('/auth/me');
-      return response;
+      const response = await api.get<any>('/auth/me');
+      // Convert id to string for consistency with frontend
+      return {
+        ...response,
+        id: String(response.id),
+      };
     } catch (error) {
       console.error('Get current user error:', error);
       throw error;

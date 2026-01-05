@@ -1,18 +1,65 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
+import { useAuth } from '../../context/AuthContext';
 
 const ProfileScreen = () => {
   const navigation = useNavigation();
+  const { user, refreshUser, logout } = useAuth();
+  const [loading, setLoading] = useState(true);
+
+  // Fetch user data when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [])
+  );
+
+  const loadUserData = async () => {
+    try {
+      setLoading(true);
+      await refreshUser();
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Đăng xuất',
+      'Bạn có chắc chắn muốn đăng xuất?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Đăng xuất',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logout();
+              navigation.navigate('Login' as never);
+            } catch (error) {
+              Alert.alert('Lỗi', 'Không thể đăng xuất. Vui lòng thử lại.');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const menuItems = [
     {
@@ -55,7 +102,7 @@ const ProfileScreen = () => {
       id: '7',
       title: 'Logout',
       icon: 'log-out-outline',
-      onPress: () => navigation.navigate('Login' as never),
+      onPress: handleLogout,
       color: Colors.error,
     },
   ];
@@ -72,68 +119,82 @@ const ProfileScreen = () => {
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         <View style={styles.content}>
-          {/* Profile Section */}
-          <View style={styles.profileSection}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={48} color={Colors.primary} />
-              </View>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
             </View>
-            <Text style={styles.userName}>Candy</Text>
-            <Text style={styles.userEmail}>candy@student.hcmut.edu.vn</Text>
-            <Text style={styles.userRole}>Student • HCMUT</Text>
-          </View>
-
-          {/* Stats Section */}
-          <View style={styles.statsSection}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>5</Text>
-              <Text style={styles.statLabel}>Appointments</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>12</Text>
-              <Text style={styles.statLabel}>Mood Check-ins</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>3</Text>
-              <Text style={styles.statLabel}>Tests Taken</Text>
-            </View>
-          </View>
-
-          {/* Menu Items */}
-          <View style={styles.menuSection}>
-            {menuItems.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.menuItem}
-                onPress={item.onPress}
-                activeOpacity={0.7}
-              >
-                <View style={styles.menuItemLeft}>
-                  <Ionicons
-                    name={item.icon as any}
-                    size={24}
-                    color={item.color || Colors.text}
-                  />
-                  <Text
-                    style={[
-                      styles.menuItemText,
-                      item.color && { color: item.color },
-                    ]}
-                  >
-                    {item.title}
-                  </Text>
+          ) : (
+            <>
+              {/* Profile Section */}
+              <View style={styles.profileSection}>
+                <View style={styles.avatarContainer}>
+                  <View style={styles.avatar}>
+                    {user?.avatar ? (
+                      <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+                    ) : (
+                      <Ionicons name="person" size={48} color={Colors.primary} />
+                    )}
+                  </View>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={Colors.textSecondary}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
+                <Text style={styles.userName}>{user?.full_name || 'User'}</Text>
+                <Text style={styles.userEmail}>{user?.email || ''}</Text>
+                <Text style={styles.userRole}>
+                  {user?.role === 'DOCTOR' ? 'Bác sĩ' : 'Sinh viên'} • {user?.phone_number || ''}
+                </Text>
+              </View>
+
+              {/* Stats Section */}
+              <View style={styles.statsSection}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>-</Text>
+                  <Text style={styles.statLabel}>Appointments</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>-</Text>
+                  <Text style={styles.statLabel}>Mood Check-ins</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>-</Text>
+                  <Text style={styles.statLabel}>Tests Taken</Text>
+                </View>
+              </View>
+
+              {/* Menu Items */}
+              <View style={styles.menuSection}>
+                {menuItems.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.menuItem}
+                    onPress={item.onPress}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.menuItemLeft}>
+                      <Ionicons
+                        name={item.icon as any}
+                        size={24}
+                        color={item.color || Colors.text}
+                      />
+                      <Text
+                        style={[
+                          styles.menuItemText,
+                          item.color && { color: item.color },
+                        ]}
+                      >
+                        {item.title}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={Colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -255,6 +316,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text,
     marginLeft: 16,
+  },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
 });
 

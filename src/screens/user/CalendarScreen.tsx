@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,15 @@ import {
   TouchableOpacity,
   Dimensions,
   Image,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { mockAppointments } from '../../constants/data';
+import { appointmentService, AppointmentWithRelations } from '../../services/appointmentService';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
 
 const { width } = Dimensions.get('window');
@@ -22,6 +25,10 @@ const CalendarScreen = () => {
   const insets = useSafeAreaInsets();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState<AppointmentWithRelations[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const navItems = [
     { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
@@ -50,12 +57,74 @@ const CalendarScreen = () => {
     return days;
   };
 
+  const loadAppointments = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await appointmentService.getAppointments({
+        limit: 100,
+      });
+      const allAppointments = response.data || [];
+      setAppointments(allAppointments);
+
+      // Filter upcoming appointments
+      const now = new Date();
+      const upcoming = allAppointments.filter((apt) => {
+        const appointmentDate = new Date(`${apt.appointment_date}T${apt.time_slot}`);
+        return appointmentDate >= now && 
+               (apt.status === 'PENDING' || apt.status === 'CONFIRMED');
+      });
+
+      // Sort by date (earliest first)
+      upcoming.sort((a, b) => {
+        const dateA = new Date(`${a.appointment_date}T${a.time_slot}`);
+        const dateB = new Date(`${b.appointment_date}T${b.time_slot}`);
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      setUpcomingAppointments(upcoming);
+    } catch (error: any) {
+      console.error('Error loading appointments:', error);
+      Alert.alert('Lỗi', error.message || 'Không thể tải lịch hẹn');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAppointments();
+    }, [loadAppointments])
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadAppointments();
+  }, [loadAppointments]);
+
   const formatMonthYear = (date: Date) => {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
     ];
     return `${months[date.getMonth()]} ${date.getFullYear()}`;
+  };
+
+  const formatDateVietnamese = (date: Date) => {
+    const weekdays = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+    const months = [
+      'tháng 1', 'tháng 2', 'tháng 3', 'tháng 4', 'tháng 5', 'tháng 6',
+      'tháng 7', 'tháng 8', 'tháng 9', 'tháng 10', 'tháng 11', 'tháng 12'
+    ];
+    return `${weekdays[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]}`;
+  };
+
+  const formatTime = (timeStr: string): string => {
+    const [hours, minutes] = timeStr.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
   };
 
   const isToday = (date: Date) => {
@@ -73,22 +142,53 @@ const CalendarScreen = () => {
   };
 
   const hasAppointment = (date: Date) => {
-    // Check if there's an appointment on this date
-    return mockAppointments.some((apt) => {
-      const aptDate = new Date(apt.date);
-      return aptDate.getDate() === date.getDate() &&
-             aptDate.getMonth() === date.getMonth() &&
-             aptDate.getFullYear() === date.getFullYear();
-    });
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return appointments.some((apt) => apt.appointment_date === dateStr);
   };
 
   const getAppointmentsForDate = (date: Date) => {
-    return mockAppointments.filter((apt) => {
-      const aptDate = new Date(apt.date);
-      return aptDate.getDate() === date.getDate() &&
-             aptDate.getMonth() === date.getMonth() &&
-             aptDate.getFullYear() === date.getFullYear();
-    });
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return appointments.filter((apt) => apt.appointment_date === dateStr);
+  };
+
+  const getStatusLabel = (status: string): string => {
+    switch (status.toUpperCase()) {
+      case 'PENDING':
+        return 'Đang chờ';
+      case 'CONFIRMED':
+        return 'Đã xác nhận';
+      case 'COMPLETED':
+        return 'Đã hoàn thành';
+      case 'CANCELLED':
+        return 'Đã hủy';
+      case 'REJECTED':
+        return 'Đã từ chối';
+      default:
+        return status;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status.toUpperCase()) {
+      case 'CONFIRMED':
+        return Colors.success;
+      case 'PENDING':
+        return Colors.warning || Colors.textSecondary;
+      case 'COMPLETED':
+        return Colors.primary;
+      case 'CANCELLED':
+      case 'REJECTED':
+        return Colors.error;
+      default:
+        return Colors.textSecondary;
+    }
+  };
+
+  const getAppointmentType = (notes?: string): 'video-call' | 'in-person' => {
+    if (notes?.toLowerCase().includes('video')) {
+      return 'video-call';
+    }
+    return 'in-person';
   };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -128,6 +228,9 @@ const CalendarScreen = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {/* Calendar Navigation */}
         <View style={styles.calendarSection}>
@@ -143,7 +246,7 @@ const CalendarScreen = () => {
 
           {/* Week Days */}
           <View style={styles.weekDays}>
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+            {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map((day) => (
               <Text key={day} style={styles.weekDay}>
                 {day}
               </Text>
@@ -191,35 +294,39 @@ const CalendarScreen = () => {
         {/* Selected Date Appointments */}
         <View style={styles.appointmentsSection}>
           <Text style={styles.sectionTitle}>
-            {selectedDate.toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
+            {formatDateVietnamese(selectedDate)}
           </Text>
           
-          {selectedAppointments.length > 0 ? (
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+            </View>
+          ) : selectedAppointments.length > 0 ? (
             selectedAppointments.map((appointment) => (
               <TouchableOpacity
                 key={appointment.id}
                 style={styles.appointmentCard}
-                onPress={() => navigation.navigate('AppointmentHistory' as never)}
+                onPress={() => navigation.navigate('AppointmentDetail' as never, { 
+                  appointmentId: appointment.id 
+                } as never)}
               >
                 <View style={styles.appointmentTimeContainer}>
                   <Ionicons name="time-outline" size={20} color={Colors.primary} />
-                  <Text style={styles.appointmentTime}>{appointment.time}</Text>
+                  <Text style={styles.appointmentTime}>{formatTime(appointment.time_slot)}</Text>
                 </View>
                 <View style={styles.appointmentInfo}>
-                  <Text style={styles.appointmentDoctor}>{appointment.doctorName}</Text>
+                  <Text style={styles.appointmentDoctor}>
+                    {appointment.doctor?.full_name || 'Bác sĩ'}
+                  </Text>
                   <Text style={styles.appointmentType}>
-                    {appointment.type === 'in-person' ? 'In-person' : 'Video call'}
+                    {getAppointmentType(appointment.notes) === 'in-person' ? 'Trực tiếp' : 'Video call'}
                   </Text>
                   <View style={styles.appointmentStatus}>
                     <View style={[
                       styles.statusDot,
-                      { backgroundColor: appointment.status === 'confirmed' ? Colors.success : Colors.warning }
+                      { backgroundColor: getStatusColor(appointment.status) }
                     ]} />
-                    <Text style={styles.statusText}>{appointment.status}</Text>
+                    <Text style={styles.statusText}>{getStatusLabel(appointment.status)}</Text>
                   </View>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
@@ -228,17 +335,66 @@ const CalendarScreen = () => {
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="calendar-outline" size={64} color={Colors.textSecondary} />
-              <Text style={styles.emptyStateText}>No appointments scheduled</Text>
+              <Text style={styles.emptyStateText}>Chưa có lịch hẹn</Text>
               <Text style={styles.emptyStateSubtext}>
-                Tap on a date with an appointment to view details
+                Chọn ngày có lịch hẹn để xem chi tiết
               </Text>
             </View>
           )}
         </View>
 
+        {/* Upcoming Appointments */}
+        {upcomingAppointments.length > 0 && (
+          <View style={styles.appointmentsSection}>
+            <Text style={styles.sectionTitle}>Lịch sắp tới</Text>
+            {upcomingAppointments.slice(0, 5).map((appointment) => {
+              const appointmentDate = new Date(`${appointment.appointment_date}T${appointment.time_slot}`);
+              return (
+                <TouchableOpacity
+                  key={appointment.id}
+                  style={styles.appointmentCard}
+                  onPress={() => navigation.navigate('AppointmentDetail' as never, { 
+                    appointmentId: appointment.id 
+                  } as never)}
+                >
+                  <View style={styles.appointmentTimeContainer}>
+                    <Ionicons name="time-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.appointmentTime}>{formatTime(appointment.time_slot)}</Text>
+                  </View>
+                  <View style={styles.appointmentInfo}>
+                    <Text style={styles.appointmentDoctor}>
+                      {appointment.doctor?.full_name || 'Bác sĩ'}
+                    </Text>
+                    <Text style={styles.appointmentDate}>
+                      {formatDateVietnamese(appointmentDate)}
+                    </Text>
+                    <View style={styles.appointmentStatus}>
+                      <View style={[
+                        styles.statusDot,
+                        { backgroundColor: getStatusColor(appointment.status) }
+                      ]} />
+                      <Text style={styles.statusText}>{getStatusLabel(appointment.status)}</Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+                </TouchableOpacity>
+              );
+            })}
+            {upcomingAppointments.length > 5 && (
+              <TouchableOpacity
+                style={styles.viewAllButton}
+                onPress={() => navigation.navigate('UpcomingAppointments' as never)}
+              >
+                <Text style={styles.viewAllText}>Xem tất cả ({upcomingAppointments.length})</Text>
+                <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {/* Quick Actions */}
         <View style={styles.quickActionsSection}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <Text style={styles.sectionTitle}>Thao tác nhanh</Text>
           <TouchableOpacity
             style={styles.quickActionCard}
             onPress={() => navigation.navigate('Appointment' as never)}
@@ -247,8 +403,8 @@ const CalendarScreen = () => {
               <Ionicons name="add-circle" size={24} color={Colors.primary} />
             </View>
             <View style={styles.quickActionInfo}>
-              <Text style={styles.quickActionTitle}>Book New Appointment</Text>
-              <Text style={styles.quickActionSubtitle}>Schedule a consultation</Text>
+              <Text style={styles.quickActionTitle}>Đặt lịch hẹn mới</Text>
+              <Text style={styles.quickActionSubtitle}>Lên lịch tư vấn</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
           </TouchableOpacity>
@@ -257,12 +413,12 @@ const CalendarScreen = () => {
             style={styles.quickActionCard}
             onPress={() => navigation.navigate('AppointmentHistory' as never)}
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: Colors.purpleLight }]}>
-              <Ionicons name="list" size={24} color={Colors.purple} />
+            <View style={[styles.quickActionIcon, { backgroundColor: Colors.purpleLight || Colors.primaryLight }]}>
+              <Ionicons name="list" size={24} color={Colors.purple || Colors.primary} />
             </View>
             <View style={styles.quickActionInfo}>
-              <Text style={styles.quickActionTitle}>View All Appointments</Text>
-              <Text style={styles.quickActionSubtitle}>See your appointment history</Text>
+              <Text style={styles.quickActionTitle}>Xem tất cả lịch hẹn</Text>
+              <Text style={styles.quickActionSubtitle}>Xem lịch sử lịch hẹn</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
           </TouchableOpacity>
@@ -309,6 +465,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  appointmentDate: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    marginTop: 8,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginRight: 4,
   },
   headerIcon: {
     width: 32,

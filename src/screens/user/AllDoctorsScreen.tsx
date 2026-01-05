@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,20 +6,80 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
+  Alert,
+  Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { mockDoctors } from '../../constants/data';
+import { doctorService, DoctorProfile } from '../../services/doctorService';
+import { chatService } from '../../services/chatService';
+import { useAuth } from '../../context/AuthContext';
 
 const AllDoctorsScreen = () => {
   const navigation = useNavigation();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+  const [doctors, setDoctors] = useState<DoctorProfile[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredDoctors = mockDoctors.filter(
+  const loadDoctors = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await doctorService.getDoctors(1, 50);
+      setDoctors(response.data || []);
+    } catch (error: any) {
+      console.error('Error loading doctors:', error);
+      Alert.alert('Lỗi', `Không thể tải danh sách bác sĩ. Vui lòng thử lại.\n${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDoctors();
+    }, [loadDoctors])
+  );
+
+  const handleStartChat = async (doctor: DoctorProfile) => {
+    try {
+      Alert.alert(
+        'Bắt đầu chat',
+        `Bạn có muốn bắt đầu chat với ${doctor.full_name}?`,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Bắt đầu',
+            onPress: async () => {
+              try {
+                const chat = await chatService.createChat(doctor.id);
+                // Navigate to chat screen
+                navigation.navigate('Chat' as never, {
+                  chatId: chat.id,
+                  doctorId: doctor.id,
+                  doctorName: doctor.full_name,
+                  doctorAvatar: doctor.avatar || undefined,
+                } as any);
+              } catch (error: any) {
+                console.error('Error creating chat:', error);
+                Alert.alert('Lỗi', `Không thể tạo chat. Vui lòng thử lại.\n${error.message}`);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error starting chat:', error);
+      Alert.alert('Lỗi', `Không thể bắt đầu chat. Vui lòng thử lại.\n${error.message}`);
+    }
+  };
+
+  const filteredDoctors = doctors.filter(
     (doctor) =>
-      doctor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doctor.specialization.toLowerCase().includes(searchQuery.toLowerCase())
+      doctor.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doctor.specialization || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -50,54 +110,68 @@ const AllDoctorsScreen = () => {
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         <View style={styles.content}>
-          <Text style={styles.sectionTitle}>
-            {filteredDoctors.length} {filteredDoctors.length === 1 ? 'Doctor' : 'Doctors'} Available
-          </Text>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loadingText}>Đang tải danh sách bác sĩ...</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.sectionTitle}>
+                {filteredDoctors.length} {filteredDoctors.length === 1 ? 'Bác sĩ' : 'Bác sĩ'} có sẵn
+              </Text>
 
-          {filteredDoctors.map((doctor) => (
-            <TouchableOpacity
-              key={doctor.id}
-              style={styles.doctorCard}
-              onPress={() => navigation.navigate('DoctorDetail' as never, { doctorId: doctor.id } as never)}
-            >
-              <View style={styles.doctorAvatar}>
-                <Ionicons name="person" size={40} color={Colors.primary} />
-              </View>
-              <View style={styles.doctorInfo}>
-                <View style={styles.doctorHeader}>
-                  <Text style={styles.doctorName}>{doctor.name}</Text>
-                  <View style={styles.ratingContainer}>
-                    <Ionicons name="star" size={16} color={Colors.warning} />
-                    <Text style={styles.rating}>{doctor.rating}</Text>
+              {filteredDoctors.map((doctor) => (
+                <View key={doctor.id} style={styles.doctorCard}>
+                  {doctor.avatar ? (
+                    <Image source={{ uri: doctor.avatar }} style={styles.doctorAvatarImage} />
+                  ) : (
+                    <View style={styles.doctorAvatar}>
+                      <Ionicons name="person" size={40} color={Colors.primary} />
+                    </View>
+                  )}
+                  <View style={styles.doctorInfo}>
+                    <View style={styles.doctorHeader}>
+                      <Text style={styles.doctorName}>{doctor.full_name}</Text>
+                      {doctor.rating !== undefined && doctor.rating > 0 && (
+                        <View style={styles.ratingContainer}>
+                          <Ionicons name="star" size={16} color={Colors.warning} />
+                          <Text style={styles.rating}>{doctor.rating.toFixed(1)}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.doctorSpecialty}>
+                      {doctor.specialization || 'Chuyên gia tâm lý'}
+                    </Text>
+                    <View style={styles.doctorActions}>
+                      <TouchableOpacity
+                        style={styles.viewButton}
+                        onPress={() => navigation.navigate('DoctorDetail' as never, { doctorId: doctor.id } as never)}
+                      >
+                        <Text style={styles.viewButtonText}>Xem hồ sơ</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.chatButton}
+                        onPress={() => handleStartChat(doctor)}
+                      >
+                        <Ionicons name="chatbubbles" size={16} color={Colors.background} style={{ marginRight: 4 }} />
+                        <Text style={styles.chatButtonText}>Chat</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
-                <Text style={styles.doctorSpecialty}>{doctor.specialization}</Text>
-                <View style={styles.doctorActions}>
-                  <TouchableOpacity
-                    style={styles.viewButton}
-                    onPress={() => navigation.navigate('DoctorDetail' as never, { doctorId: doctor.id } as never)}
-                  >
-                    <Text style={styles.viewButtonText}>View Profile</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.bookButton}
-                    onPress={() => navigation.navigate('DoctorDetail' as never, { doctorId: doctor.id } as never)}
-                  >
-                    <Text style={styles.bookButtonText}>Book</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              ))}
 
-          {filteredDoctors.length === 0 && (
-            <View style={styles.emptyState}>
-              <Ionicons name="search-outline" size={64} color={Colors.textSecondary} />
-              <Text style={styles.emptyStateText}>No doctors found</Text>
-              <Text style={styles.emptyStateSubtext}>
-                Try adjusting your search query
-              </Text>
-            </View>
+              {filteredDoctors.length === 0 && !loading && (
+                <View style={styles.emptyState}>
+                  <Ionicons name="search-outline" size={64} color={Colors.textSecondary} />
+                  <Text style={styles.emptyStateText}>Không tìm thấy bác sĩ</Text>
+                  <Text style={styles.emptyStateSubtext}>
+                    Thử điều chỉnh từ khóa tìm kiếm
+                  </Text>
+                </View>
+              )}
+            </>
           )}
         </View>
       </ScrollView>
@@ -172,6 +246,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 16,
   },
+  doctorAvatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginRight: 16,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 64,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
   doctorInfo: {
     flex: 1,
   },
@@ -219,15 +309,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
   },
-  bookButton: {
+  chatButton: {
     flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
     backgroundColor: Colors.primary,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
-  bookButtonText: {
+  chatButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: Colors.background,

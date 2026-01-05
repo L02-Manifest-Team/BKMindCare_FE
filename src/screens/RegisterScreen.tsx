@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import { LinearGradient } from 'expo-linear-gradient';
 import { authService } from '../services/authService';
 
 const RegisterScreen = () => {
@@ -31,7 +31,6 @@ const RegisterScreen = () => {
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    // Validation
     if (!formData.email || !formData.password || !formData.fullName || !formData.phoneNumber) {
       Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin');
       return;
@@ -56,25 +55,17 @@ const RegisterScreen = () => {
     setLoading(true);
     try {
       const { confirmPassword, fullName, phoneNumber, ...rest } = formData;
-      // Convert to snake_case for backend
       const registerData = {
         ...rest,
         full_name: fullName,
         phone_number: phoneNumber,
       };
-      const response = await authService.register(registerData);
+      await authService.register(registerData);
       
-      Alert.alert('Thành công', 'Đăng ký tài khoản thành công!', [
+      Alert.alert('Thành công', 'Đăng ký tài khoản thành công! Vui lòng đăng nhập.', [
         {
-          text: 'OK',
-          onPress: () => {
-            // Navigate based on role
-            if (response.role === 'DOCTOR') {
-              navigation.navigate('DoctorDashboard' as never);
-            } else {
-              navigation.navigate('MoodCheckIn' as never);
-            }
-          },
+          text: 'Đăng nhập ngay',
+          onPress: () => navigation.navigate('Login' as never),
         },
       ]);
     } catch (error: any) {
@@ -85,311 +76,323 @@ const RegisterScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={['#E3F2FD', '#BBDEFB', '#E1F5FE']}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Đăng ký tài khoản</Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={24} color="#000" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Đăng ký tài khoản</Text>
+          </View>
 
-        {/* Form */}
-        <View style={styles.form}>
-          {/* Full Name */}
-          <View style={styles.inputContainer}>
+          {/* Form Card */}
+          <View style={styles.card}>
+            {/* Full Name */}
             <Text style={styles.label}>Họ và tên</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="person-outline" size={20} color={Colors.textSecondary} />
+              <Ionicons name="person-outline" size={22} color="#4A90E2" />
               <TextInput
                 style={styles.input}
                 placeholder="Nhập họ và tên"
+                placeholderTextColor="#9CA3AF"
                 value={formData.fullName}
                 onChangeText={(text) => setFormData({ ...formData, fullName: text })}
                 autoCapitalize="words"
+                editable={!loading}
               />
             </View>
-          </View>
 
-          {/* Email */}
-          <View style={styles.inputContainer}>
+            {/* Email */}
             <Text style={styles.label}>Email</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="mail-outline" size={20} color={Colors.textSecondary} />
+              <Ionicons name="mail-outline" size={22} color="#4A90E2" />
               <TextInput
                 style={styles.input}
                 placeholder="example@email.com"
+                placeholderTextColor="#9CA3AF"
                 value={formData.email}
                 onChangeText={(text) => setFormData({ ...formData, email: text })}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                editable={!loading}
               />
             </View>
-          </View>
 
-          {/* Phone Number */}
-          <View style={styles.inputContainer}>
+            {/* Phone */}
             <Text style={styles.label}>Số điện thoại</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="call-outline" size={20} color={Colors.textSecondary} />
+              <Ionicons name="call-outline" size={22} color="#4A90E2" />
               <TextInput
                 style={styles.input}
                 placeholder="0123456789"
+                placeholderTextColor="#9CA3AF"
                 value={formData.phoneNumber}
                 onChangeText={(text) => setFormData({ ...formData, phoneNumber: text })}
                 keyboardType="phone-pad"
+                editable={!loading}
               />
             </View>
-          </View>
 
-          {/* Password */}
-          <View style={styles.inputContainer}>
+            {/* Password */}
             <Text style={styles.label}>Mật khẩu</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} />
+              <Ionicons name="lock-closed-outline" size={22} color="#4A90E2" />
               <TextInput
                 style={styles.input}
-                placeholder="Nhập mật khẩu"
+                placeholder="Nhập mật khẩu (ít nhất 6 ký tự)"
+                placeholderTextColor="#9CA3AF"
                 value={formData.password}
                 onChangeText={(text) => setFormData({ ...formData, password: text })}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
+                editable={!loading}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons
                   name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color={Colors.textSecondary}
+                  size={22}
+                  color="#6B7280"
                 />
               </TouchableOpacity>
             </View>
-          </View>
 
-          {/* Confirm Password */}
-          <View style={styles.inputContainer}>
+            {/* Confirm Password */}
             <Text style={styles.label}>Xác nhận mật khẩu</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} />
+              <Ionicons name="lock-closed-outline" size={22} color="#4A90E2" />
               <TextInput
                 style={styles.input}
                 placeholder="Nhập lại mật khẩu"
+                placeholderTextColor="#9CA3AF"
                 value={formData.confirmPassword}
                 onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
+                editable={!loading}
               />
               <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
                 <Ionicons
                   name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color={Colors.textSecondary}
+                  size={22}
+                  color="#6B7280"
                 />
               </TouchableOpacity>
             </View>
-          </View>
 
-          {/* Role Selection */}
-          <View style={styles.inputContainer}>
+            {/* Role Selection */}
             <Text style={styles.label}>Bạn là</Text>
-            <View style={styles.roleContainer}>
+            <View style={styles.roleRow}>
               <TouchableOpacity
                 style={[
-                  styles.roleButton,
-                  formData.role === 'PATIENT' && styles.roleButtonActive,
+                  styles.roleBtn,
+                  formData.role === 'PATIENT' && styles.roleBtnActive,
                 ]}
                 onPress={() => setFormData({ ...formData, role: 'PATIENT' })}
+                disabled={loading}
               >
                 <Ionicons
                   name="person"
                   size={24}
-                  color={formData.role === 'PATIENT' ? Colors.primary : Colors.textSecondary}
+                  color={formData.role === 'PATIENT' ? '#4A90E2' : '#6B7280'}
                 />
-                <Text
-                  style={[
-                    styles.roleText,
-                    formData.role === 'PATIENT' && styles.roleTextActive,
-                  ]}
-                >
+                <Text style={[
+                  styles.roleText,
+                  formData.role === 'PATIENT' && styles.roleTextActive,
+                ]}>
                   Sinh viên
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
-                  styles.roleButton,
-                  formData.role === 'DOCTOR' && styles.roleButtonActive,
+                  styles.roleBtn,
+                  formData.role === 'DOCTOR' && styles.roleBtnActive,
                 ]}
                 onPress={() => setFormData({ ...formData, role: 'DOCTOR' })}
+                disabled={loading}
               >
                 <Ionicons
                   name="medical"
                   size={24}
-                  color={formData.role === 'DOCTOR' ? Colors.primary : Colors.textSecondary}
+                  color={formData.role === 'DOCTOR' ? '#4A90E2' : '#6B7280'}
                 />
-                <Text
-                  style={[
-                    styles.roleText,
-                    formData.role === 'DOCTOR' && styles.roleTextActive,
-                  ]}
-                >
+                <Text style={[
+                  styles.roleText,
+                  formData.role === 'DOCTOR' && styles.roleTextActive,
+                ]}>
                   Bác sĩ
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
 
-          {/* Register Button */}
-          <TouchableOpacity
-            style={[styles.registerButton, loading && styles.registerButtonDisabled]}
-            onPress={handleRegister}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={Colors.background} />
-            ) : (
-              <Text style={styles.registerButtonText}>Đăng ký</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Login Link */}
-          <View style={styles.loginContainer}>
-            <Text style={styles.loginText}>Đã có tài khoản? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login' as never)}>
-              <Text style={styles.loginLink}>Đăng nhập ngay</Text>
+            {/* Register Button */}
+            <TouchableOpacity
+              style={[styles.registerBtn, loading && styles.registerBtnDisabled]}
+              onPress={handleRegister}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.registerBtnText}>Đăng ký</Text>
+              )}
             </TouchableOpacity>
+
+            {/* Login Link */}
+            <View style={styles.loginRow}>
+              <Text style={styles.loginText}>Đã có tài khoản? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Login' as never)}>
+                <Text style={styles.loginLink}>Đăng nhập ngay</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+  },
+  flex: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
   },
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
     paddingTop: 60,
-    backgroundColor: Colors.primaryLight,
+    paddingBottom: 20,
   },
-  backButton: {
+  backBtn: {
     padding: 8,
     marginRight: 12,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: '#000',
   },
-  form: {
-    flex: 1,
+  // Card
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
     padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
-  inputContainer: {
-    marginBottom: 20,
-  },
+  // Input
   label: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: Colors.text,
+    color: '#000',
     marginBottom: 8,
+    marginTop: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundLight,
+    backgroundColor: '#F9FAFB',
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#E5E7EB',
   },
   input: {
     flex: 1,
-    marginLeft: 12,
     fontSize: 16,
-    color: Colors.text,
+    color: '#000',
+    marginLeft: 12,
   },
-  roleContainer: {
+  // Role
+  roleRow: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 8,
+    marginBottom: 16,
   },
-  roleButton: {
+  roleBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
+    padding: 14,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#fff',
     gap: 8,
   },
-  roleButtonActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.blueLight,
+  roleBtnActive: {
+    borderColor: '#4A90E2',
+    backgroundColor: '#E3F2FD',
   },
   roleText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: '#6B7280',
   },
   roleTextActive: {
-    color: Colors.primary,
+    color: '#4A90E2',
   },
-  registerButton: {
-    backgroundColor: Colors.primary,
+  // Register Button
+  registerBtn: {
+    backgroundColor: '#4A90E2',
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 24,
-    elevation: 2,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    marginTop: 16,
   },
-  registerButtonDisabled: {
-    backgroundColor: Colors.textLight,
+  registerBtnDisabled: {
+    backgroundColor: '#9CA3AF',
   },
-  registerButtonText: {
+  registerBtnText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.background,
+    color: '#fff',
   },
-  loginContainer: {
+  // Login Link
+  loginRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: 20,
   },
   loginText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    fontSize: 15,
+    color: '#6B7280',
   },
   loginLink: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#4A90E2',
   },
 });
 
 export default RegisterScreen;
-

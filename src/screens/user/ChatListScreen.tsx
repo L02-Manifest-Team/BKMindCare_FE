@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,32 +6,42 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
+  Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { mockDoctors } from '../../constants/data';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
-import { db } from '../../config/firebase';
+import { chatService, Chat } from '../../services/chatService';
+import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
+import { notificationService } from '../../services/notificationService';
 
 interface ChatConversation {
-  id: string;
-  doctorId: string;
+  id: number;
+  doctorId: number;
   doctorName: string;
-  doctorSpecialization: string;
+  doctorSpecialization?: string;
   doctorAvatar?: string;
   lastMessage: string;
   lastMessageTime: Date;
   unreadCount: number;
-  isAnonymous: boolean;
 }
 
 const ChatListScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { user, logout } = useAuth();
+  const { addNotification } = useNotifications();
   const [searchQuery, setSearchQuery] = useState('');
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCheckedMessages, setLastCheckedMessages] = useState<Record<number, number>>({});
 
   const navItems = [
     { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
@@ -40,89 +50,137 @@ const ChatListScreen = () => {
     { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'Profile' },
   ];
 
-  useEffect(() => {
-    // Load conversations from mock data
-    const loadConversations = async () => {
-      try {
-        // Get all chat IDs from mock data
-        const chatIds = ['anonymous-chat-1', 'chat-doctor-1', 'chat-doctor-2'];
-        const loadedConversations: ChatConversation[] = [];
+  const loadConversations = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // Check if user is authenticated
+      if (!user || !user.id) {
+        console.warn('User not authenticated, skipping chat load', { user: user ? { id: user.id, email: user.email } : null });
+        setConversations([]);
+        return;
+      }
+      
+      const chats = await chatService.getChats();
+      
+      // Transform backend chats to UI format
+      const transformedConversations: ChatConversation[] = chats.map((chat: Chat) => {
+        // Find doctor participant (exclude current user)
+        // Convert user.id to number for comparison
+        const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
+        const doctorParticipant = chat.participants.find(
+          (p) => p.role === 'DOCTOR' && p.id !== userId
+        ) || chat.participants.find((p) => p.id !== userId) || chat.participants[0];
+        
+        return {
+          id: chat.id,
+          doctorId: doctorParticipant.id,
+          doctorName: doctorParticipant.full_name,
+          doctorSpecialization: doctorParticipant.role === 'DOCTOR' ? 'Chuyên gia' : undefined,
+          doctorAvatar: doctorParticipant.avatar || undefined,
+          lastMessage: chat.last_message?.content || 'Chưa có tin nhắn',
+          // Use epoch date for chats with no messages so they sort to bottom
+          lastMessageTime: chat.last_message 
+            ? new Date(chat.last_message.created_at) 
+            : new Date(0), // Unix epoch (1970-01-01) for empty chats
+          unreadCount: chat.unread_count,
+        };
+      });
 
-        for (const chatId of chatIds) {
-          try {
-            // Get last message
-            const messagesRef = db.collection(`chats/${chatId}/messages`);
-            const snapshot = await messagesRef.get();
+      transformedConversations.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
+      
+      // Check for new messages and create notifications
+      for (const chat of chats) {
+        if (chat.last_message && chat.unread_count > 0) {
+          const lastMessageId = chat.last_message.id;
+          const lastCheckedId = lastCheckedMessages[chat.id] || 0;
+          
+          // If this is a new message (not checked before)
+          if (lastMessageId > lastCheckedId) {
+            // Find doctor participant
+            const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
+            const doctorParticipant = chat.participants.find(
+              (p) => p.role === 'DOCTOR' && p.id !== userId
+            ) || chat.participants.find((p) => p.id !== userId) || chat.participants[0];
             
-            if (snapshot.docs.length > 0) {
-              // Sort by createdAt to get last message
-              const allMessages = snapshot.docs.map((doc: any) => {
-                const data = doc.data();
-                let createdAt: Date;
-                if (data.createdAt instanceof Date) {
-                  createdAt = data.createdAt;
-                } else if (data.createdAt?.toDate) {
-                  createdAt = data.createdAt.toDate();
-                } else if (data.createdAt) {
-                  createdAt = new Date(data.createdAt);
-                } else {
-                  createdAt = new Date();
+            // Only create notification if message is from doctor (not from current user)
+            const messageFromDoctor = chat.last_message.sender_id !== userId;
+            if (messageFromDoctor) {
+              const doctorName = doctorParticipant.full_name;
+              const messagePreview = chat.last_message.content.length > 50 
+                ? chat.last_message.content.substring(0, 50) + '...'
+                : chat.last_message.content;
+              
+              // Create notification
+              await addNotification({
+                type: 'message',
+                title: doctorName,
+                message: messagePreview,
+                chatId: chat.id,
+              });
+
+              // Send push notification
+              await notificationService.sendPushNotification(
+                `Tin nhắn mới từ ${doctorName}`,
+                messagePreview,
+                {
+                  type: 'message',
+                  chatId: chat.id,
                 }
-                return {
-                  text: data.text,
-                  createdAt: createdAt,
-                  user: data.user,
-                };
-              });
-
-              allMessages.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-              const lastMessage = allMessages[0];
-
-              // Determine doctor info
-              let doctorId = '1';
-              let doctorName = 'Anonymous Support';
-              let doctorSpecialization = 'Support';
-              let isAnonymous = true;
-
-              if (chatId.includes('doctor')) {
-                const doctorNum = chatId.split('-')[2];
-                const doctor = mockDoctors.find((d) => d.id === doctorNum) || mockDoctors[0];
-                doctorId = doctor.id;
-                doctorName = doctor.name;
-                doctorSpecialization = doctor.specialization;
-                isAnonymous = false;
-              }
-
-              loadedConversations.push({
-                id: chatId,
-                doctorId,
-                doctorName,
-                doctorSpecialization,
-                doctorAvatar: isAnonymous ? undefined : `https://i.pravatar.cc/150?img=${doctorId}`,
-                lastMessage: lastMessage.text,
-                lastMessageTime: lastMessage.createdAt,
-                unreadCount: 0, // Mock unread count
-                isAnonymous,
-              });
+              );
             }
-          } catch (error) {
-            console.error(`Error loading chat ${chatId}:`, error);
+            
+            // Update last checked message ID
+            setLastCheckedMessages(prev => ({
+              ...prev,
+              [chat.id]: lastMessageId,
+            }));
           }
         }
-
-        // Sort by last message time (newest first)
-        loadedConversations.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
-        setConversations(loadedConversations);
-      } catch (error) {
-        console.error('Error loading conversations:', error);
       }
-    };
+      
+      setConversations(transformedConversations);
+    } catch (error: any) {
+      console.error('Error loading conversations:', error);
+      // Handle authentication errors
+      if (error?.message?.includes('hết hạn')) {
+        Alert.alert(
+          'Phiên đăng nhập hết hạn',
+          'Vui lòng đăng nhập lại để tiếp tục sử dụng.',
+          [
+            {
+              text: 'Đăng nhập lại',
+              onPress: async () => {
+                try {
+                  await logout();
+                  navigation.navigate('Login' as never);
+                } catch (logoutError) {
+                  console.error('Logout error:', logoutError);
+                  navigation.navigate('Login' as never);
+                }
+              },
+            },
+          ]
+        );
+      } else if (error?.message && !error.message.includes('Not Found')) {
+        Alert.alert('Lỗi', `Không thể tải danh sách chat. Vui lòng thử lại.\n${error.message}`);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user, navigation, logout]);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadConversations();
+    }, [loadConversations])
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
     loadConversations();
-    // Refresh every 3 seconds
-    const interval = setInterval(loadConversations, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  }, [loadConversations]);
 
   const formatTime = (date: Date) => {
     const now = new Date();
@@ -140,30 +198,21 @@ const ChatListScreen = () => {
 
   const filteredConversations = conversations.filter((conv) =>
     conv.doctorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    conv.doctorSpecialization.toLowerCase().includes(searchQuery.toLowerCase())
+    conv.doctorSpecialization?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleStartAnonymousChat = () => {
-    // For anonymous chat, we need to show doctor info to student
-    // Default to first doctor for anonymous chat
-    const defaultDoctor = mockDoctors[0];
-    navigation.navigate('Chat' as never, { 
-      chatId: 'anonymous-chat-1',
-      doctorId: defaultDoctor.id,
-      doctorName: defaultDoctor.name,
-      doctorAvatar: defaultDoctor.avatar,
-      isAnonymous: true, // Student is anonymous, but can see doctor
-    } as any);
+  const handleStartAnonymousChat = async () => {
+    // Navigate to AllDoctorsScreen to select a doctor
+    navigation.navigate('AllDoctors' as never);
   };
 
   const handleOpenChat = (conversation: ChatConversation) => {
-    navigation.navigate('Chat' as never, {
+    (navigation as any).navigate('Chat', {
       chatId: conversation.id,
-      doctorId: conversation.isAnonymous ? mockDoctors[0]?.id : conversation.doctorId,
+      doctorId: conversation.doctorId,
       doctorName: conversation.doctorName,
       doctorAvatar: conversation.doctorAvatar,
-      isAnonymous: conversation.isAnonymous,
-    } as any);
+    });
   };
 
   return (
@@ -193,31 +242,21 @@ const ChatListScreen = () => {
         )}
       </View>
 
-      {/* Anonymous Chat Button */}
-      <View style={styles.anonymousSection}>
-        <TouchableOpacity
-          style={styles.anonymousButton}
-          onPress={handleStartAnonymousChat}
-          activeOpacity={0.7}
-        >
-          <View style={styles.anonymousIconContainer}>
-            <Ionicons name="lock-closed" size={24} color={Colors.primary} />
-          </View>
-          <View style={styles.anonymousInfo}>
-            <Text style={styles.anonymousTitle}>Chat ẩn danh</Text>
-            <Text style={styles.anonymousSubtitle}>Bắt đầu cuộc trò chuyện ẩn danh</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-        </TouchableOpacity>
-      </View>
-
       {/* Conversations List */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
-        {filteredConversations.length > 0 ? (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingText}>Đang tải...</Text>
+          </View>
+        ) : filteredConversations.length > 0 ? (
           <>
             <Text style={styles.sectionTitle}>Cuộc trò chuyện</Text>
             {filteredConversations.map((conversation) => (
@@ -228,10 +267,11 @@ const ChatListScreen = () => {
                 activeOpacity={0.7}
               >
                 <View style={styles.avatarContainer}>
-                  {conversation.isAnonymous ? (
-                    <View style={styles.anonymousAvatar}>
-                      <Ionicons name="lock-closed" size={20} color={Colors.primary} />
-                    </View>
+                  {conversation.doctorAvatar ? (
+                    <Image
+                      source={{ uri: conversation.doctorAvatar }}
+                      style={styles.doctorAvatarImage}
+                    />
                   ) : (
                     <View style={styles.doctorAvatar}>
                       <Ionicons name="person" size={24} color={Colors.primary} />
@@ -258,10 +298,11 @@ const ChatListScreen = () => {
                     <Text style={styles.lastMessage} numberOfLines={1}>
                       {conversation.lastMessage}
                     </Text>
-                    {conversation.isAnonymous && (
-                      <View style={styles.anonymousTag}>
-                        <Ionicons name="lock-closed" size={10} color={Colors.primary} />
-                        <Text style={styles.anonymousTagText}>Ẩn danh</Text>
+                    {conversation.doctorSpecialization && (
+                      <View style={styles.specializationTag}>
+                        <Text style={styles.specializationTagText}>
+                          {conversation.doctorSpecialization}
+                        </Text>
                       </View>
                     )}
                   </View>
@@ -274,7 +315,7 @@ const ChatListScreen = () => {
             <Ionicons name="chatbubbles-outline" size={64} color={Colors.textSecondary} />
             <Text style={styles.emptyStateText}>Chưa có cuộc trò chuyện nào</Text>
             <Text style={styles.emptyStateSubtext}>
-              Bấm vào nút "Chat ẩn danh" để bắt đầu
+              Các cuộc trò chuyện với chuyên gia sẽ hiển thị ở đây
             </Text>
           </View>
         )}
@@ -396,15 +437,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  anonymousAvatar: {
+  doctorAvatarImage: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.primaryLight,
+  },
+  loadingContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.primary,
+    paddingVertical: 64,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: Colors.textSecondary,
   },
   unreadBadge: {
     position: 'absolute',
@@ -453,20 +500,17 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     flex: 1,
   },
-  anonymousTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  specializationTag: {
     backgroundColor: Colors.primaryLight,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
     marginLeft: 8,
   },
-  anonymousTagText: {
+  specializationTagText: {
     fontSize: 10,
     color: Colors.primary,
     fontWeight: '600',
-    marginLeft: 4,
   },
   emptyState: {
     alignItems: 'center',

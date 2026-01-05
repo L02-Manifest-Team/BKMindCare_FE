@@ -4,6 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
+import { NotificationProvider } from './src/context/NotificationContext';
 
 // Screens
 import SplashScreen from './src/screens/SplashScreen';
@@ -13,21 +14,23 @@ import RegisterScreen from './src/screens/RegisterScreen';
 import UserDashboard from './src/screens/user/UserDashboard';
 import MoodCheckInScreen from './src/screens/user/MoodCheckInScreen';
 import ChatScreen from './src/screens/user/ChatScreen';
+import DoctorChatScreen from './src/screens/doctor/DoctorChatScreen';
 import ChatListScreen from './src/screens/user/ChatListScreen';
 import AppointmentScreen from './src/screens/user/AppointmentScreen';
 import AppointmentDetailScreen from './src/screens/user/AppointmentDetailScreen';
+import EditAppointmentScreen from './src/screens/user/EditAppointmentScreen';
 import MentalHealthTestScreen from './src/screens/user/MentalHealthTestScreen';
 import FAQScreen from './src/screens/user/FAQScreen';
 import AllDoctorsScreen from './src/screens/user/AllDoctorsScreen';
 import ProfileScreen from './src/screens/user/ProfileScreen';
 import AppointmentHistoryScreen from './src/screens/user/AppointmentHistoryScreen';
+import UpcomingAppointmentsScreen from './src/screens/user/UpcomingAppointmentsScreen';
 import MoodHistoryScreen from './src/screens/user/MoodHistoryScreen';
 import MoodResultScreen from './src/screens/user/MoodResultScreen';
 import DoctorDetailScreen from './src/screens/user/DoctorDetailScreen';
 import CalendarScreen from './src/screens/user/CalendarScreen';
 import DoctorDashboard from './src/screens/doctor/DoctorDashboard';
 import ExpertDashboard from './src/screens/doctor/ExpertDashboard';
-import DoctorChatScreen from './src/screens/doctor/DoctorChatScreen';
 import DoctorChatListScreen from './src/screens/doctor/DoctorChatListScreen';
 import DoctorCalendarScreen from './src/screens/doctor/DoctorCalendarScreen';
 import DoctorProfileScreen from './src/screens/doctor/DoctorProfileScreen';
@@ -45,19 +48,49 @@ import DoctorEditProfileScreen from './src/screens/doctor/EditProfileScreen';
 import DoctorSettingsScreen from './src/screens/doctor/SettingsScreen';
 import DoctorHelpSupportScreen from './src/screens/doctor/HelpSupportScreen';
 import DoctorAppointmentHistoryScreen from './src/screens/doctor/DoctorAppointmentHistoryScreen';
+import DoctorAppointmentReviewScreen from './src/screens/doctor/DoctorAppointmentReviewScreen';
+import DoctorNotificationScreen from './src/screens/doctor/DoctorNotificationScreen';
+import JournalScreen from './src/screens/user/JournalScreen';
 
 const Stack = createStackNavigator();
 
 export default function App() {
   return (
     <AuthProvider>
-      <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <NavigationContainer>
+      <NotificationProvider>
+        <SafeAreaProvider>
+          <StatusBar style="dark" />
+          <NavigationContainer>
           <Stack.Navigator
             initialRouteName="Splash"
             screenOptions={{
               headerShown: false,
+              cardStyleInterpolator: ({ current, layouts }) => ({
+                cardStyle: {
+                  transform: [
+                    {
+                      translateX: current.progress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [layouts.screen.width, 0],
+                      }),
+                    },
+                  ],
+                  opacity: current.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1],
+                  }),
+                },
+              }),
+              transitionSpec: {
+                open: {
+                  animation: 'timing',
+                  config: { duration: 250 },
+                },
+                close: {
+                  animation: 'timing',
+                  config: { duration: 250 },
+                },
+              },
             }}
           >
             <Stack.Screen name="Splash" component={SplashScreen} />
@@ -70,11 +103,13 @@ export default function App() {
           <Stack.Screen name="Chat" component={ChatScreen} />
           <Stack.Screen name="Appointment" component={AppointmentScreen} />
           <Stack.Screen name="AppointmentDetail" component={AppointmentDetailScreen} />
+          <Stack.Screen name="EditAppointment" component={EditAppointmentScreen} />
           <Stack.Screen name="MentalHealthTest" component={MentalHealthTestScreen} />
           <Stack.Screen name="FAQ" component={FAQScreen} />
           <Stack.Screen name="AllDoctors" component={AllDoctorsScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
           <Stack.Screen name="AppointmentHistory" component={AppointmentHistoryScreen} />
+          <Stack.Screen name="UpcomingAppointments" component={UpcomingAppointmentsScreen} />
           <Stack.Screen name="MoodHistory" component={MoodHistoryScreen} />
           <Stack.Screen name="MoodResult" component={MoodResultScreen} />
           <Stack.Screen name="DoctorDetail" component={DoctorDetailScreen} />
@@ -99,9 +134,13 @@ export default function App() {
           <Stack.Screen name="DoctorSettings" component={DoctorSettingsScreen} />
           <Stack.Screen name="DoctorHelpSupport" component={DoctorHelpSupportScreen} />
           <Stack.Screen name="DoctorAppointmentHistory" component={DoctorAppointmentHistoryScreen} />
+          <Stack.Screen name="DoctorAppointmentReview" component={DoctorAppointmentReviewScreen} />
+          <Stack.Screen name="DoctorNotification" component={DoctorNotificationScreen} />
+          <Stack.Screen name="Journal" component={JournalScreen} />
         </Stack.Navigator>
       </NavigationContainer>
-    </SafeAreaProvider>
+        </SafeAreaProvider>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

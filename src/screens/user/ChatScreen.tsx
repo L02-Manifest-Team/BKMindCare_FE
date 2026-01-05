@@ -1,235 +1,565 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   Image,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  KeyboardAvoidingView,
+  TextInput,
+  Keyboard,
+  StatusBar,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { GiftedChat, IMessage, User } from 'react-native-gifted-chat';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { GiftedChat, IMessage, Bubble, Send, InputToolbar, Composer } from 'react-native-gifted-chat';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
-import BottomNavigationBar from '../../components/BottomNavigationBar';
-// Using mock Firebase for UI testing
-import { db } from '../../config/firebase';
+import { chatService, Message } from '../../services/chatService';
+import { useAuth } from '../../context/AuthContext';
+import { websocketService } from '../../services/websocketService';
 
 const ChatScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const { user } = useAuth();
   const [messages, setMessages] = useState<IMessage[]>([]);
-  
+  const [loading, setLoading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const insets = useSafeAreaInsets();
+  const chatIdRef = useRef<number | null>(null);
+  const isConnectedRef = useRef(false);
+  const hasLoadedRef = useRef(false);
+
   const routeParams = route.params as any;
-  const chatId = routeParams?.chatId || 'anonymous-chat-1';
-  const doctorId = routeParams?.doctorId;
-  const isAnonymous = routeParams?.isAnonymous !== undefined ? routeParams.isAnonymous : !doctorId;
-  const doctorName = routeParams?.doctorName;
+  const chatId = routeParams?.chatId;
+  // For doctor view, we don't need doctorName/doctorAvatar from params
+  // For patient view, we need doctorName/doctorAvatar
+  const doctorName = routeParams?.doctorName || (user?.role === 'DOCTOR' ? undefined : 'Chuyên gia');
   const doctorAvatar = routeParams?.doctorAvatar;
+  
+  // Determine if current user is doctor
+  const isDoctor = user?.role === 'DOCTOR';
+  
+  // Get current user ID in consistent format
+  const currentUserId = user?.id ? String(user.id) : '0';
 
-  // In anonymous chat, student can see doctor info, but doctor can't see student info
-  const currentUser: User = {
-    _id: isAnonymous ? 'anonymous' : 'user1',
-    name: isAnonymous ? 'Anonymous' : 'Candy',
-    avatar: isAnonymous ? undefined : 'https://i.pravatar.cc/150?img=5',
-  };
-
+  // Listen to keyboard events
   useEffect(() => {
-    // Mock: Load messages from mock Firebase
-    const loadMessages = async () => {
-      try {
-        const messagesRef = db.collection(`chats/${chatId}/messages`);
-        const snapshot = await messagesRef.get();
-        const newMessages = snapshot.docs.map((doc: any) => {
-          const data = doc.data();
-          let createdAt: Date;
-          if (data.createdAt instanceof Date) {
-            createdAt = data.createdAt;
-          } else if (data.createdAt?.toDate) {
-            createdAt = data.createdAt.toDate();
-          } else if (data.createdAt) {
-            createdAt = new Date(data.createdAt);
-          } else {
-            createdAt = new Date();
-          }
-          return {
-            _id: doc.id,
-            text: data.text,
-            createdAt: createdAt,
-            user: {
-              _id: data.user._id,
-              name: data.user.name,
-              avatar: data.user.avatar,
-            },
-          };
-        });
-        // Sort by createdAt descending (newest first for GiftedChat)
-        newMessages.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        setMessages(newMessages);
-      } catch (error) {
-        console.error('Error loading messages:', error);
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
       }
+    );
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
     };
+  }, []);
 
-    loadMessages();
-    // Simulate real-time updates every 2 seconds
-    const interval = setInterval(loadMessages, 2000);
-    return () => clearInterval(interval);
-  }, [chatId]);
+  // Load initial messages from API
+  const loadMessages = useCallback(async () => {
+    if (!chatId || !user?.id) {
+      setLoading(false);
+      return;
+    }
 
+    const chatIdNumber = typeof chatId === 'string' ? parseInt(chatId, 10) : chatId;
+    
+    // Don't skip - always reload to ensure fresh data
+    // The hasLoadedRef is just for showing loading state
+
+    try {
+      // Only show loading spinner on first load
+      if (!hasLoadedRef.current || chatIdRef.current !== chatIdNumber) {
+        setLoading(true);
+      }
+      
+      chatIdRef.current = chatIdNumber;
+      
+      console.log('[ChatScreen] Loading messages for chat:', chatIdNumber);
+      
+      // Load only recent 50 messages for faster initial load
+      const backendMessages = await chatService.getMessages(chatIdNumber, 0, 50);
+      
+      console.log('[ChatScreen] Loaded', backendMessages.length, 'messages');
+      
+      // Convert to GiftedChat format
+      const giftedMessages: IMessage[] = backendMessages.map((msg: Message) => {
+        // Parse date
+        let date: Date;
+        if (typeof msg.created_at === 'string') {
+          const dateStr = msg.created_at.endsWith('Z') || msg.created_at.includes('+') || msg.created_at.includes('-', 10)
+            ? msg.created_at
+            : msg.created_at + 'Z';
+          date = new Date(dateStr);
+        } else {
+          date = new Date(msg.created_at);
+        }
+        
+        const senderId = String(msg.sender_id);
+        const isCurrentUser = currentUserId === senderId;
+        
+        // Determine display name and avatar
+        let displayName: string;
+        let displayAvatar: string | undefined;
+        
+        if (isCurrentUser) {
+          displayName = user?.full_name || (isDoctor ? 'Bác sĩ' : 'Bạn');
+          displayAvatar = user?.avatar || undefined;
+        } else {
+          // Show real information for both doctor and patient
+          if (isDoctor) {
+            // Doctor viewing patient - get patient info from participants
+            // This will be handled in loadMessages when we have chat participants
+            displayName = 'Sinh viên';
+            displayAvatar = undefined;
+          } else {
+            displayName = doctorName;
+            displayAvatar = doctorAvatar;
+          }
+        }
+        
+        return {
+          _id: msg.id.toString(),
+          text: msg.content,
+          createdAt: date,
+          user: {
+            _id: senderId,
+            name: displayName,
+            avatar: displayAvatar,
+          },
+        };
+      });
+      
+      // Reverse messages for GiftedChat (newest at bottom, oldest at top)
+      const reversedMessages = giftedMessages.reverse();
+      
+      console.log('[ChatScreen] Setting', reversedMessages.length, 'messages to state');
+      setMessages(reversedMessages);
+      hasLoadedRef.current = true;
+    } catch (error: any) {
+      console.error('[ChatScreen] Error loading messages:', error);
+      // Show alert if there's an error
+      Alert.alert('Lỗi', 'Không thể tải tin nhắn. Vui lòng thử lại.');
+      setMessages([]); // Clear messages on error
+    } finally {
+      setLoading(false);
+    }
+  }, [chatId, user, doctorName, doctorAvatar, isDoctor, currentUserId]);
+
+  // Handle WebSocket messages
+  const handleWebSocketMessage = useCallback((message: Message) => {
+    if (!user?.id || !chatIdRef.current) return;
+    
+    console.log('[ChatScreen] Received WebSocket message:', message.id, message.content.substring(0, 30));
+    
+    // Convert backend message to GiftedChat format
+    let date: Date;
+    if (typeof message.created_at === 'string') {
+      const dateStr = message.created_at.endsWith('Z') || message.created_at.includes('+') || message.created_at.includes('-', 10)
+        ? message.created_at
+        : message.created_at + 'Z';
+      date = new Date(dateStr);
+    } else {
+      date = new Date(message.created_at);
+    }
+    
+    const senderId = String(message.sender_id);
+    const isCurrentUser = currentUserId === senderId;
+    
+    // Determine display name and avatar
+    let displayName: string;
+    let displayAvatar: string | undefined;
+    
+    if (isCurrentUser) {
+      displayName = user?.full_name || (isDoctor ? 'Bác sĩ' : 'Bạn');
+      displayAvatar = user?.avatar || undefined;
+    } else {
+      if (isDoctor) {
+        displayName = 'Sinh viên ẩn danh';
+        displayAvatar = undefined;
+      } else {
+        displayName = doctorName;
+        displayAvatar = doctorAvatar;
+      }
+    }
+    
+    const newMessage: IMessage = {
+      _id: message.id.toString(),
+      text: message.content,
+      createdAt: date,
+      user: {
+        _id: senderId,
+        name: displayName,
+        avatar: displayAvatar,
+      },
+    };
+    
+    // Check if message already exists (avoid duplicates)
+    setMessages((previousMessages) => {
+      const exists = previousMessages.some(msg => msg._id === newMessage._id);
+      if (exists) {
+        console.log('[ChatScreen] Duplicate message, skipping:', newMessage._id);
+        return previousMessages;
+      }
+      
+      // Add new message
+      return GiftedChat.append(previousMessages, [newMessage]);
+    });
+  }, [user, doctorName, doctorAvatar, isDoctor, currentUserId]);
+
+  // Set up WebSocket connection and load messages in parallel
+  useFocusEffect(
+    useCallback(() => {
+      if (!chatId || !user?.id) {
+        console.log('[ChatScreen] Missing chatId or user, skipping setup');
+        return;
+      }
+      
+      const chatIdNumber = typeof chatId === 'string' ? parseInt(chatId, 10) : chatId;
+      
+      // Reset loaded flag if chat changed
+      if (chatIdRef.current !== chatIdNumber) {
+        console.log('[ChatScreen] Chat changed, resetting loaded flag');
+        hasLoadedRef.current = false;
+        setMessages([]); // Clear old messages
+      }
+      
+      // Load messages first
+      console.log('[ChatScreen] useFocusEffect: Loading messages for chat:', chatIdNumber);
+      loadMessages();
+      
+      // Connect WebSocket (non-blocking, don't wait for it)
+      setTimeout(() => {
+        console.log('[ChatScreen] Connecting WebSocket to chat:', chatIdNumber);
+        websocketService.connect(
+          chatIdNumber,
+          handleWebSocketMessage,
+          (error) => {
+            console.error('[ChatScreen] WebSocket error:', error);
+          },
+          () => {
+            console.log('[ChatScreen] WebSocket closed');
+            isConnectedRef.current = false;
+          }
+        );
+        isConnectedRef.current = true;
+      }, 100); // Small delay to prioritize message loading
+      
+      return () => {
+        // Disconnect WebSocket when screen loses focus
+        console.log('[ChatScreen] Disconnecting WebSocket');
+        websocketService.disconnect();
+        isConnectedRef.current = false;
+      };
+    }, [chatId, user?.id, loadMessages, handleWebSocketMessage])
+  );
+
+  // Send message
   const onSend = useCallback(async (newMessages: IMessage[] = []) => {
-    if (newMessages.length === 0) return;
+    if (newMessages.length === 0 || !chatId || !user?.id) return;
 
     const message = newMessages[0];
+    const chatIdNumber = typeof chatId === 'string' ? parseInt(chatId, 10) : chatId;
+    
+    // Optimistically add to UI
+    const optimisticMessage: IMessage = {
+      ...message,
+      user: {
+        ...message.user,
+        _id: currentUserId, // Ensure correct user ID
+        name: user?.full_name || (isDoctor ? 'Bác sĩ' : 'Bạn'),
+        avatar: user?.avatar || undefined,
+      },
+    };
+    
+    setMessages((previousMessages) =>
+      GiftedChat.append(previousMessages, [optimisticMessage])
+    );
+
     try {
-      await db.collection(`chats/${chatId}/messages`).add({
-        text: message.text,
-        createdAt: new Date(),
-        user: {
-          _id: currentUser._id,
-          name: currentUser.name,
-          avatar: currentUser.avatar,
-        },
-      });
-      // Update local state immediately for better UX
-      setMessages((prevMessages) => [...newMessages, ...prevMessages]);
-    } catch (error) {
-      console.error('Error sending message:', error);
+      // Send via WebSocket if connected
+      if (websocketService.isConnected()) {
+        console.log('[ChatScreen] Sending message via WebSocket');
+        websocketService.sendMessage(message.text);
+        // Message will be replaced by server version via WebSocket callback
+      } else {
+        // Fallback to API
+        console.log('[ChatScreen] WebSocket not connected, using API');
+        await chatService.sendMessage(chatIdNumber, message.text);
+        // Reload messages to get server version
+        loadMessages();
+      }
+    } catch (error: any) {
+      console.error('[ChatScreen] Error sending message:', error);
+      Alert.alert('Lỗi', 'Không thể gửi tin nhắn. Vui lòng thử lại.');
+      // Remove optimistic message on error
+      setMessages((previousMessages) =>
+        previousMessages.filter(msg => msg._id !== optimisticMessage._id)
+      );
     }
-  }, [chatId, currentUser]);
+  }, [chatId, user, currentUserId, isDoctor, loadMessages]);
+
+  // Render custom components
+  const renderBubble = (props: any) => {
+    return (
+      <Bubble
+        {...props}
+        wrapperStyle={{
+          right: {
+            backgroundColor: Colors.primary,
+            marginBottom: 8,
+            marginRight: 4,
+            borderRadius: 20,
+            borderBottomRightRadius: 4,
+            ...Platform.select({
+              ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+              },
+              android: {
+                elevation: 3,
+              },
+            }),
+          },
+          left: {
+            backgroundColor: '#fff',
+            marginBottom: 8,
+            marginLeft: 4,
+            borderRadius: 20,
+            borderBottomLeftRadius: 4,
+            ...Platform.select({
+              ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.08,
+                shadowRadius: 3,
+              },
+              android: {
+                elevation: 2,
+              },
+            }),
+          },
+        }}
+        textStyle={{
+          right: {
+            color: '#FFFFFF',
+            fontSize: 15,
+            lineHeight: 20,
+          },
+          left: {
+            color: '#212121',
+            fontSize: 15,
+            lineHeight: 20,
+          },
+        }}
+      />
+    );
+  };
+
+  const [inputText, setInputText] = useState('');
+  const inputRef = useRef<TextInput>(null);
+
+  // Handle custom send
+  const handleCustomSend = async () => {
+    if (!inputText.trim() || !chatId || !user?.id) return;
+
+    const text = inputText.trim();
+    setInputText('');
+
+    // Call onSend with the formatted message
+    const message: IMessage = {
+      _id: Date.now().toString(),
+      text,
+      createdAt: new Date(),
+      user: {
+        _id: currentUserId,
+        name: user?.full_name || (isDoctor ? 'Bác sĩ' : 'Bạn'),
+        avatar: user?.avatar || undefined,
+      },
+    };
+    
+    await onSend([message]);
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Đang tải tin nhắn...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <View style={styles.userInfo}>
-            {/* Always show doctor info to student, even in anonymous chat */}
-            {doctorAvatar ? (
-              <Image
-                source={{ uri: doctorAvatar }}
-                style={styles.doctorAvatarImage}
-              />
-            ) : (
-              <View style={styles.avatarContainer}>
-                <Ionicons name="person" size={20} color={Colors.primary} />
-              </View>
-            )}
-            <View>
-              <Text style={styles.userName}>
-                {doctorName || 'Dr. Support'}
-              </Text>
-              <View style={styles.statusContainer}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>Online</Text>
-                {isAnonymous && (
-                  <View style={styles.anonymousBadgeHeader}>
-                    <Ionicons name="lock-closed" size={12} color={Colors.primary} />
-                    <Text style={styles.anonymousBadgeText}>Ẩn danh</Text>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      
+      {/* Modern Header with Gradient */}
+      <LinearGradient
+        colors={[Colors.primary, Colors.secondary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[styles.headerGradient, { paddingTop: insets.top }]}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          
+          <View style={styles.headerCenter}>
+            <View style={styles.userInfo}>
+              {isDoctor ? (
+                // Doctor viewing patient - show patient info
+                <View style={styles.avatarContainer}>
+                  <Ionicons name="person" size={24} color="#fff" />
+                  <View style={styles.onlineIndicator} />
+                </View>
+              ) : (
+                // Patient viewing doctor
+                doctorAvatar ? (
+                  <View style={styles.avatarWrapper}>
+                    <Image
+                      source={{ uri: doctorAvatar }}
+                      style={styles.doctorAvatarImage}
+                    />
+                    <View style={styles.onlineIndicator} />
                   </View>
-                )}
+                ) : (
+                  <View style={styles.avatarContainer}>
+                    <Ionicons name="person" size={24} color="#fff" />
+                    <View style={styles.onlineIndicator} />
+                  </View>
+                )
+              )}
+              <View style={styles.userInfoText}>
+                <Text style={styles.userName}>
+                  {isDoctor ? 'Sinh viên' : doctorName}
+                </Text>
+                <View style={styles.statusContainer}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.statusText}>Đang hoạt động</Text>
+                </View>
               </View>
             </View>
           </View>
+          
+          <View style={styles.headerRight}>
+            <TouchableOpacity 
+              style={styles.headerButton}
+              activeOpacity={0.7}
+            >
+              <View style={styles.iconButton}>
+                <Ionicons name="call" size={20} color={Colors.primary} />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.headerButton}
+              activeOpacity={0.7}
+            >
+              <View style={styles.iconButton}>
+                <Ionicons name="videocam" size={20} color={Colors.primary} />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="call" size={24} color={Colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="videocam" size={24} color={Colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="ellipsis-vertical" size={24} color={Colors.text} />
-          </TouchableOpacity>
+      </LinearGradient>
+
+      {/* Anonymous Info Badge for Doctor */}
+      {isDoctor && (
+        <View style={styles.anonymousInfoBadge}>
+          <Ionicons name="information-circle" size={16} color={Colors.primary} />
+          <Text style={styles.anonymousInfoText}>
+            Bạn đang chat với sinh viên ẩn danh.
+          </Text>
         </View>
-      </View>
+      )}
 
       {/* Chat Messages */}
       <KeyboardAvoidingView
         style={styles.chatContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <GiftedChat
-          messages={messages}
-          onSend={onSend}
-          user={currentUser}
-          placeholder="Nhập tin nhắn..."
-          renderBubble={(props) => (
-            <View
-              style={[
-                styles.bubble,
-                props.currentMessage?.user._id === currentUser._id
-                  ? styles.sentBubble
-                  : styles.receivedBubble,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.bubbleText,
-                  props.currentMessage?.user._id === currentUser._id
-                    ? styles.sentBubbleText
-                    : styles.receivedBubbleText,
-                ]}
-              >
-                {props.currentMessage?.text}
-              </Text>
-            </View>
-          )}
-          renderInputToolbar={(props) => {
-            return (
-              <View style={styles.inputToolbar}>
-                <TouchableOpacity style={styles.inputButton}>
-                  <Ionicons name="add-circle" size={24} color={Colors.primary} />
-                </TouchableOpacity>
-                <View style={styles.inputContainer}>
-                  {props.textInput}
-                </View>
-                <TouchableOpacity style={styles.inputButton}>
-                  <Ionicons name="mic" size={24} color={Colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-            );
-          }}
-          renderAvatar={(props) => {
-            if (props.currentMessage?.user._id === currentUser._id) {
-              return null;
-            }
-            return (
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={16} color={Colors.primary} />
-              </View>
-            );
-          }}
-          showUserAvatar={false}
-          alwaysShowSend
-          scrollToBottom
-          infiniteScroll
-        />
-      </KeyboardAvoidingView>
-
-      {/* Anonymous Badge */}
-      {isAnonymous && (
-        <View style={styles.anonymousBadge}>
-          <Ionicons name="lock-closed" size={14} color={Colors.primary} />
-          <Text style={styles.anonymousText}>Chat ẩn danh - Thông tin của bạn được bảo mật</Text>
+        <View style={styles.messagesWrapper}>
+          <GiftedChat
+            messages={messages}
+            onSend={onSend}
+            user={{
+              _id: currentUserId,
+              name: user?.full_name || (isDoctor ? 'Bác sĩ' : 'Bạn'),
+              avatar: user?.avatar || undefined,
+            }}
+            renderBubble={renderBubble}
+            renderInputToolbar={() => null} // Hide default input toolbar
+            minInputToolbarHeight={0}
+            alwaysShowSend
+            showUserAvatar
+            showAvatarForEveryMessage
+          />
         </View>
-      )}
 
-      {/* Bottom Navigation */}
-      <BottomNavigationBar
-        items={[
-          { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
-          { name: 'Chat', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles', route: 'ChatList' },
-          { name: 'Calendar', icon: 'calendar-outline', activeIcon: 'calendar', route: 'Calendar' },
-          { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'Profile' },
-        ]}
-      />
+        {/* Custom Input Bar - Fixed at bottom */}
+        <View style={[
+          styles.customInputContainer,
+          {
+            paddingBottom: Platform.OS === 'ios' 
+              ? (keyboardHeight > 0 ? 10 : insets.bottom + 10)
+              : 10,
+            marginBottom: Platform.OS === 'android' && keyboardHeight > 0 ? keyboardHeight : 0,
+          }
+        ]}>
+          <TouchableOpacity style={styles.attachButton} activeOpacity={0.7}>
+            <Ionicons name="add-circle" size={28} color={Colors.primary} />
+          </TouchableOpacity>
+          
+          <TextInput
+            ref={inputRef}
+            style={styles.customTextInput}
+            placeholder="Nhập tin nhắn..."
+            placeholderTextColor="#999"
+            value={inputText}
+            onChangeText={setInputText}
+            multiline
+            textAlignVertical="center"
+          />
+          
+          <TouchableOpacity 
+            style={[styles.sendButtonCustom, !inputText.trim() && styles.sendButtonDisabled]}
+            onPress={handleCustomSend}
+            activeOpacity={0.7}
+            disabled={!inputText.trim()}
+          >
+            <LinearGradient
+              colors={inputText.trim() ? [Colors.primary, Colors.secondary] : ['#ccc', '#aaa']}
+              style={styles.sendButtonGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name="send" size={20} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 };
@@ -237,170 +567,222 @@ const ChatScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#f5f7fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f7fa',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 15,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  headerGradient: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    paddingTop: 50,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.background,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 60,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 12,
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  avatarWrapper: {
+    position: 'relative',
+    marginRight: 12,
+  },
   avatarContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryLight,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   doctorAvatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.success,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  userInfoText: {
+    flex: 1,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 2,
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.success,
-    marginRight: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#fff',
+    marginRight: 6,
   },
   statusText: {
     fontSize: 12,
-    color: Colors.textSecondary,
-    marginRight: 8,
-  },
-  anonymousBadgeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  anonymousBadgeText: {
-    fontSize: 10,
-    color: Colors.primary,
-    fontWeight: '600',
-    marginLeft: 4,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '500',
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
   headerButton: {
-    padding: 8,
-    marginLeft: 8,
+    marginLeft: 4,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chatContainer: {
     flex: 1,
-    backgroundColor: Colors.purpleLight,
+    backgroundColor: '#f5f7fa',
   },
-  bubble: {
-    padding: 12,
-    borderRadius: 16,
-    maxWidth: '75%',
-    marginBottom: 4,
-  },
-  sentBubble: {
-    backgroundColor: Colors.secondary,
-    alignSelf: 'flex-end',
-    marginRight: 8,
-  },
-  receivedBubble: {
-    backgroundColor: Colors.backgroundLight,
-    alignSelf: 'flex-start',
-    marginLeft: 8,
-  },
-  bubbleText: {
-    fontSize: 16,
-  },
-  sentBubbleText: {
-    color: Colors.background,
-  },
-  receivedBubbleText: {
-    color: Colors.text,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  messageAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 8,
-  },
-  messageAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 8,
-  },
-  anonymousBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primaryLight,
-    padding: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  anonymousText: {
-    fontSize: 12,
-    color: Colors.primary,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  inputToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    backgroundColor: Colors.background,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  inputButton: {
-    padding: 8,
-  },
-  inputContainer: {
+  messagesWrapper: {
     flex: 1,
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 20,
+  },
+  anonymousInfoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primaryLight,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginHorizontal: 8,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  anonymousInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.primary,
+    marginLeft: 8,
+    lineHeight: 18,
+  },
+  customInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    gap: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  attachButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customTextInput: {
+    flex: 1,
+    color: '#212121',
+    fontSize: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    minHeight: 44,
+    maxHeight: 100,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  sendButtonCustom: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  sendButtonGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
   },
 });
 
 export default ChatScreen;
-

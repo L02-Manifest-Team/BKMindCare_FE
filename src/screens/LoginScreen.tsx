@@ -14,8 +14,10 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/colors';
 import { authService } from '../services/authService';
+import { moodService } from '../services/moodService';
 
 const LoginScreen = () => {
   const navigation = useNavigation();
@@ -25,7 +27,6 @@ const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    // Validation
     if (!email || !password) {
       Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin');
       return;
@@ -41,51 +42,69 @@ const LoginScreen = () => {
     try {
       const userProfile = await authService.login({ email, password });
       
-      // Navigate based on role
       if (userProfile.role === 'DOCTOR') {
-        navigation.navigate('DoctorDashboard' as never);
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'DoctorDashboard' as never }],
+        });
       } else {
-        navigation.navigate('MoodCheckIn' as never);
+        const hasCheckedIn = await moodService.hasTodayCheckIn();
+        if (hasCheckedIn) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'UserDashboard' as never }],
+          });
+        } else {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'MoodCheckIn' as never }],
+          });
+        }
       }
     } catch (error: any) {
-      Alert.alert('Lỗi', error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
+      Alert.alert('Lỗi', error.message || 'Đăng nhập thất bại');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={['#E3F2FD', '#BBDEFB', '#E1F5FE']}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.appName}>BKMindCare</Text>
-          <Text style={styles.subtitle}>Chăm sóc sức khỏe tinh thần</Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Logo & Title */}
+          <View style={styles.header}>
+            <Image
+              source={require('../../assets/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.appName}>BKMindCare</Text>
+            <Text style={styles.tagline}>Chăm sóc sức khỏe tinh thần</Text>
+          </View>
 
-        {/* Form */}
-        <View style={styles.form}>
-          <Text style={styles.title}>Đăng nhập</Text>
+          {/* Form Card */}
+          <View style={styles.card}>
+            <Text style={styles.title}>Đăng nhập</Text>
 
-          {/* Email Input */}
-          <View style={styles.inputContainer}>
+            {/* Email */}
             <Text style={styles.label}>Email</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="mail-outline" size={20} color={Colors.textSecondary} />
+              <Ionicons name="mail-outline" size={22} color="#4A90E2" />
               <TextInput
                 style={styles.input}
-                placeholder="example@email.com"
+                placeholder="Nhập email của bạn"
+                placeholderTextColor="#9CA3AF"
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -93,16 +112,15 @@ const LoginScreen = () => {
                 editable={!loading}
               />
             </View>
-          </View>
 
-          {/* Password Input */}
-          <View style={styles.inputContainer}>
+            {/* Password */}
             <Text style={styles.label}>Mật khẩu</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} />
+              <Ionicons name="lock-closed-outline" size={22} color="#4A90E2" />
               <TextInput
                 style={styles.input}
                 placeholder="Nhập mật khẩu"
+                placeholderTextColor="#9CA3AF"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -112,227 +130,212 @@ const LoginScreen = () => {
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons
                   name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color={Colors.textSecondary}
+                  size={22}
+                  color="#6B7280"
                 />
               </TouchableOpacity>
             </View>
-          </View>
 
-          {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
-          </TouchableOpacity>
+            {/* Forgot Password */}
+            <TouchableOpacity style={styles.forgotBtn}>
+              <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+            </TouchableOpacity>
 
-          {/* Login Button */}
-          <TouchableOpacity
-            style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={Colors.background} />
-            ) : (
-              <Text style={styles.loginButtonText}>Đăng nhập</Text>
-            )}
-          </TouchableOpacity>
+            {/* Login Button */}
+            <TouchableOpacity
+              style={[styles.loginBtn, loading && styles.loginBtnDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.loginBtnText}>Đăng nhập</Text>
+              )}
+            </TouchableOpacity>
 
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>hoặc</Text>
-            <View style={styles.dividerLine} />
-          </View>
+            {/* Divider */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>hoặc</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-          {/* HCMUT Login Button */}
-          <TouchableOpacity style={styles.hcmutButton} disabled={loading}>
-            <View style={styles.hcmutButtonContent}>
+            {/* HCMUT Button */}
+            <TouchableOpacity style={styles.hcmutBtn} disabled={loading}>
               <Image
                 source={require('../../assets/bk.png')}
                 style={styles.bkIcon}
                 resizeMode="contain"
               />
-              <Text style={styles.hcmutButtonText}>Đăng nhập bằng HCMUT</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Register Link */}
-          <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register' as never)}>
-              <Text style={styles.registerLink}>Đăng ký ngay</Text>
+              <Text style={styles.hcmutBtnText}>Đăng nhập bằng HCMUT</Text>
             </TouchableOpacity>
-          </View>
 
-          {/* Help Text */}
-          <Text style={styles.helpText}>
-            Nếu bạn cần hỗ trợ hoặc có câu hỏi, vui lòng{' '}
-            <Text style={styles.helpLink}>liên hệ với chúng tôi</Text>
-          </Text>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            {/* Register */}
+            <View style={styles.registerRow}>
+              <Text style={styles.registerText}>Chưa có tài khoản? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Register' as never)}>
+                <Text style={styles.registerLink}>Đăng ký ngay</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+  },
+  flex: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  header: {
-    backgroundColor: Colors.primaryLight,
-    paddingTop: 60,
+    paddingHorizontal: 24,
     paddingBottom: 40,
+  },
+  // Header
+  header: {
     alignItems: 'center',
+    paddingTop: 60,
+    paddingBottom: 24,
   },
   logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 16,
+    width: 90,
+    height: 90,
+    marginBottom: 12,
   },
   appName: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: Colors.primary,
-    marginBottom: 8,
+    color: '#000',
   },
-  subtitle: {
+  tagline: {
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: '#333',
+    marginTop: 4,
   },
-  form: {
-    flex: 1,
+  // Card
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
     padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: '#1F2937',
     marginBottom: 24,
+    textAlign: 'center',
   },
-  inputContainer: {
-    marginBottom: 16,
-  },
+  // Input
   label: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: Colors.text,
+    color: '#374151',
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundLight,
+    backgroundColor: '#F9FAFB',
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#E5E7EB',
   },
   input: {
     flex: 1,
-    marginLeft: 12,
     fontSize: 16,
-    color: Colors.text,
+    color: '#1F2937',
+    marginLeft: 12,
   },
-  forgotPassword: {
+  // Forgot
+  forgotBtn: {
     alignSelf: 'flex-end',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  forgotPasswordText: {
-    fontSize: 14,
-    color: Colors.primary,
+  forgotText: {
+    fontSize: 15,
+    color: '#4A90E2',
     fontWeight: '600',
   },
-  loginButton: {
-    backgroundColor: Colors.primary,
+  // Login Button
+  loginBtn: {
+    backgroundColor: '#4A90E2',
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 16,
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
   },
-  loginButtonDisabled: {
-    backgroundColor: Colors.textLight,
+  loginBtnDisabled: {
+    backgroundColor: '#9CA3AF',
   },
-  loginButtonText: {
+  loginBtnText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.background,
+    color: '#fff',
   },
+  // Divider
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginVertical: 20,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: '#E5E7EB',
   },
   dividerText: {
-    marginHorizontal: 16,
+    marginHorizontal: 12,
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: '#6B7280',
   },
-  hcmutButton: {
-    backgroundColor: Colors.background,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  hcmutButtonContent: {
+  // HCMUT
+  hcmutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   bkIcon: {
     width: 24,
     height: 24,
-    marginRight: 12,
+    marginRight: 10,
   },
-  hcmutButtonText: {
+  hcmutBtnText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.text,
+    color: '#374151',
   },
-  registerContainer: {
+  // Register
+  registerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 24,
   },
   registerText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    fontSize: 15,
+    color: '#6B7280',
   },
   registerLink: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  helpText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 24,
-    lineHeight: 18,
-  },
-  helpLink: {
-    color: Colors.primary,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#4A90E2',
   },
 });
 

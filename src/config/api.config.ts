@@ -16,10 +16,38 @@
 // Chọn một trong các config dưới đây:
 
 // Config cho điện thoại thật (Expo Go)
+import { Platform } from 'react-native';
+
 export const API_CONFIG = {
-  BASE_URL: 'http://192.168.91.125:8000',  // ⚠️ THAY ĐỔI IP NÀY
+  // Dynamically determine base URL based on platform and environment
+  BASE_URL: (() => {
+    try {
+      // Try to get debugger host for Expo Go on real devices
+      const Constants = require('expo-constants').default;
+      
+      // For Expo SDK 46+, use expoConfig instead of manifest
+      const debuggerHost = 
+        Constants?.expoConfig?.hostUri?.split(':').shift() ||
+        Constants?.manifest?.debuggerHost?.split(':').shift() ||
+        Constants?.manifest2?.extra?.expoGo?.debuggerHost?.split(':').shift();
+      
+      if (debuggerHost && 
+          !debuggerHost.includes('localhost') && 
+          debuggerHost !== '127.0.0.1') {
+        return `http://${debuggerHost}:8000`;
+      }
+    } catch (e) {
+      console.warn('[API Config] Could not detect debugger host:', e);
+    }
+    
+    if (Platform.OS === 'android') {
+      return 'http://10.0.2.2:8000';
+    }
+    
+    return 'http://localhost:8000';
+  })(),
   VERSION: '/api',
-  TIMEOUT: 15000, // 15 seconds
+  TIMEOUT: 15000,
 };
 
 // Config cho Android Emulator (uncomment để dùng)

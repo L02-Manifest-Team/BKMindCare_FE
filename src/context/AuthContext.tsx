@@ -39,13 +39,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const checkAuth = async () => {
     try {
       const token = await AsyncStorage.getItem('accessToken');
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      
       if (token) {
-        const userProfile = await authService.getCurrentUser();
-        setUser(userProfile);
-        setIsAuthenticated(true);
+        // If we have access token but no refresh token, it's an old session
+        // Clear it and require re-login to get refresh_token
+        if (!refreshToken) {
+          console.warn('[AuthContext] No refresh token, clearing old session');
+          // Silently clear old session and require re-login
+          await authService.logout();
+          setUser(null);
+          setIsAuthenticated(false);
+          setIsLoading(false);
+          return;
+        }
+        
+        try {
+          const userProfile = await authService.getCurrentUser();
+          setUser(userProfile);
+          setIsAuthenticated(true);
+        } catch (error: any) {
+          console.error('[AuthContext] Get current user error:', error);
+          // If getCurrentUser fails, try to refresh token
+          if (refreshToken) {
+            try {
+              await authService.refreshToken();
+              const userProfile = await authService.getCurrentUser();
+              setUser(userProfile);
+              setIsAuthenticated(true);
+            } catch (refreshError) {
+              console.error('[AuthContext] Token refresh failed during auth check:', refreshError);
+              await authService.logout();
+              setUser(null);
+              setIsAuthenticated(false);
+            }
+          } else {
+            // No refresh token available, logout
+            console.warn('[AuthContext] Token invalid and no refresh token available. Logging out.');
+            await authService.logout();
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+        }
       }
     } catch (error) {
-      console.error('Auth check error:', error);
+      console.error('[AuthContext] Auth check error:', error);
       // If token is invalid, clear it
       await authService.logout();
       setUser(null);

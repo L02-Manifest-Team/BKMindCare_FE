@@ -9,13 +9,13 @@
 import { auth, db, storage, addMockData } from '../services/mockFirebase';
 
 // Initialize mock data on first import
-// Note: In React Native, we can safely call addMockData
-try {
-  addMockData();
-} catch (error) {
-  // Silently fail if there's an error initializing mock data
-  console.log('Mock data initialization skipped');
-}
+// Note: Commented out since we're using real backend now
+// try {
+//   addMockData();
+// } catch (error) {
+//   // Silently fail if there's an error initializing mock data
+//   console.log('Mock data initialization skipped');
+// }
 
 // TODO: Uncomment below to use real Firebase
 // const firebaseConfig = {
