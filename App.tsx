@@ -51,12 +51,35 @@ import DoctorAppointmentHistoryScreen from './src/screens/doctor/DoctorAppointme
 import DoctorAppointmentReviewScreen from './src/screens/doctor/DoctorAppointmentReviewScreen';
 import DoctorNotificationScreen from './src/screens/doctor/DoctorNotificationScreen';
 import JournalScreen from './src/screens/user/JournalScreen';
+import * as Sentry from '@sentry/react-native';
 
+
+Sentry.init({
+  dsn: 'https://69bdcec54011562ac38938f2ae1e3e74@o4510663719518208.ingest.de.sentry.io/4510663725613136',
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // Enable Logs
+  enableLogs: true,
+
+  // Configure Session Replay
+
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1,
+  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
+
+throw new Error('TEST SENTRY - APP START');
 
 
 const Stack = createStackNavigator();
 
-export default function App() {
+export default Sentry.wrap(function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
@@ -146,5 +169,4 @@ export default function App() {
       </NotificationProvider>
     </AuthProvider>
   );
-}
-
+});

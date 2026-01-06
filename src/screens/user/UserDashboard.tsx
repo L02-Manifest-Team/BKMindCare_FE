@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import React, { useState, useEffect } from 'react';
-=======
 import React, { useState, useCallback, useEffect } from 'react';
->>>>>>> eb3396b99c771e54cb544820438813dedf71b291
 import {
   View,
   Text,
@@ -20,7 +16,36 @@ import { Colors } from '../../constants/colors';
 import { moodService, MoodType, MoodEntry } from '../../services/moodService';
 import { authService } from '../../services/authService';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
-import testFirebaseConnection from '../../config/testFirebase';
+import { useNotifications } from '../../context/NotificationContext';
+
+interface StreakData {
+  streakCount: number;
+  weeklyStatus: { day: string; checked: boolean; mood?: MoodType }[];
+  userName: string;
+}
+
+// Mood info mapping with images
+const moodImages = {
+  HAPPY: require('../../../assets/Happy.png'),
+  EXCITED: require('../../../assets/Wonderful.png'),
+  CALM: require('../../../assets/Shy.png'),
+  SAD: require('../../../assets/Sad.png'),
+  ANXIOUS: require('../../../assets/Nervous.png'),
+  STRESSED: require('../../../assets/Awkward.png'),
+  ANGRY: require('../../../assets/Nervous.png'),
+  TIRED: require('../../../assets/Sad.png'),
+};
+
+const moodInfo: Record<MoodType, { emoji: string; label: string; color: string; isNegative: boolean }> = {
+  HAPPY: { emoji: '😊', label: 'Vui vẻ', color: '#4CAF50', isNegative: false },
+  EXCITED: { emoji: '🤩', label: 'Hào hứng', color: '#FF9800', isNegative: false },
+  CALM: { emoji: '😌', label: 'Bình tĩnh', color: '#2196F3', isNegative: false },
+  SAD: { emoji: '😢', label: 'Buồn', color: '#9E9E9E', isNegative: true },
+  ANXIOUS: { emoji: '😰', label: 'Lo lắng', color: '#FF5722', isNegative: true },
+  STRESSED: { emoji: '😫', label: 'Căng thẳng', color: '#E91E63', isNegative: true },
+  ANGRY: { emoji: '😠', label: 'Tức giận', color: '#F44336', isNegative: true },
+  TIRED: { emoji: '😴', label: 'Mệt mỏi', color: '#795548', isNegative: true },
+};
 
 const UserDashboard = () => {
   const navigation = useNavigation();
@@ -31,20 +56,49 @@ const UserDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('Bạn');
 
-  const [connectionStatus, setConnectionStatus] = useState('Đang kiểm tra...');
-  const [isConnected, setIsConnected] = useState(false);
+  // Refresh data every time screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [])
+  );
 
+  // Also refresh when coming back from MoodCheckIn
   useEffect(() => {
-    const checkConnection = async () => {
-      const isConnected = await testFirebaseConnection();
-      setConnectionStatus(isConnected ? '✅ Đã kết nối Firebase' : '❌ Lỗi kết nối');
-      setIsConnected(isConnected);
-    };
-    
-    checkConnection();
-  }, []);
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchData();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
-  const upcomingAppointment = mockAppointments[0];
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      try {
+        const user = await authService.getCurrentUser();
+        setUserName(user.full_name || 'Bạn');
+      } catch (e) {
+        console.log('Could not fetch user');
+      }
+      
+      const streak = await moodService.getStreakData();
+      setStreakData(streak);
+      
+      const hasCheckedIn = await moodService.hasTodayCheckIn();
+      if (hasCheckedIn) {
+        const latestMood = await moodService.getLatestMood();
+        setTodayMood(latestMood);
+      } else {
+        // Clear todayMood if not checked in
+        setTodayMood(null);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const navItems = [
     { name: 'Trang chủ', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
@@ -78,14 +132,7 @@ const UserDashboard = () => {
               />
             </View>
             <View style={styles.welcomeSection}>
-<<<<<<< HEAD
-              {/* <Text style={[styles.welcomeText, { color: isConnected ? Colors.text : Colors.error }]}>
-                {connectionStatus}
-              </Text> */}
-              <Text>Welcome back Candy</Text>
-=======
               <Text style={styles.welcomeText}>Xin chào, {userName}!</Text>
->>>>>>> eb3396b99c771e54cb544820438813dedf71b291
             </View>
             <View style={styles.headerRight}>
               <TouchableOpacity 
