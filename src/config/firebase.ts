@@ -1,23 +1,40 @@
-// Mock Firebase for UI testing (no backend required)
-// To use real Firebase, uncomment the code below and install firebase package
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
-// import { initializeApp } from 'firebase/app';
-// import { getAuth } from 'firebase/auth';
-// import { getFirestore } from 'firebase/firestore';
-// import { getStorage } from 'firebase/storage';
+// Cấu hình Firebase của bạn
+const firebaseConfig = {
+  apiKey: "AIzaSyCaV4Jasng_RsYGmhWzAFQhRWVG5dN0DYg",
+  authDomain: "bkmindcare.firebaseapp.com",
+  projectId: "bkmindcare",
+  storageBucket: "bkmindcare.firebasestorage.app",
+  messagingSenderId: "641372169052",
+  appId: "1:641372169052:web:951dc52fa14994264b9799",
+  measurementId: "G-4H783W1XL3"
+};
 
-import { auth, db, storage, addMockData } from '../services/mockFirebase';
 
-// Initialize mock data on first import
-// Note: In React Native, we can safely call addMockData
-try {
-  addMockData();
-} catch (error) {
-  // Silently fail if there's an error initializing mock data
-  console.log('Mock data initialization skipped');
-}
+// Khởi tạo Firebase
+const app = initializeApp(firebaseConfig);
 
-// TODO: Uncomment below to use real Firebase
+// Khởi tạo Auth
+const auth = getAuth(app);
+
+// Khởi tạo Firestore
+const db = getFirestore(app);
+
+// Bật chế độ offline cho Firestore
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code === 'failed-precondition') {
+    console.warn('Chỉ có một tab có thể truy cập Firestore offline');
+  } else if (err.code === 'unimplemented') {
+    console.warn('Trình duyệt không hỗ trợ offline persistence');
+  }
+});
+
+// Khởi tạo Storage
+const storage = getStorage(app);
 // const firebaseConfig = {
 //   apiKey: "your-api-key",
 //   authDomain: "your-project.firebaseapp.com",

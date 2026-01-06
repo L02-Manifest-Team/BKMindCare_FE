@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { mockDoctors, mockAppointments } from '../../constants/data';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
+import testFirebaseConnection from '../../config/testFirebase';
 
 const UserDashboard = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
+  const [connectionStatus, setConnectionStatus] = useState('Đang kiểm tra...');
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    const checkConnection = async () => {
+      const isConnected = await testFirebaseConnection();
+      setConnectionStatus(isConnected ? '✅ Đã kết nối Firebase' : '❌ Lỗi kết nối');
+      setIsConnected(isConnected);
+    };
+    
+    checkConnection();
+  }, []);
 
   const upcomingAppointment = mockAppointments[0];
 
@@ -41,7 +55,10 @@ const UserDashboard = () => {
               />
             </View>
             <View style={styles.welcomeSection}>
-              <Text style={styles.welcomeText}>Welcome back, Candy</Text>
+              {/* <Text style={[styles.welcomeText, { color: isConnected ? Colors.text : Colors.error }]}>
+                {connectionStatus}
+              </Text> */}
+              <Text>Welcome back Candy</Text>
             </View>
             <View style={styles.headerRight}>
               <TouchableOpacity onPress={() => navigation.navigate('StudentNotification' as never)}>

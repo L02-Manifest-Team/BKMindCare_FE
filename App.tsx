@@ -44,6 +44,8 @@ import DoctorSettingsScreen from './src/screens/doctor/SettingsScreen';
 import DoctorHelpSupportScreen from './src/screens/doctor/HelpSupportScreen';
 import DoctorAppointmentHistoryScreen from './src/screens/doctor/DoctorAppointmentHistoryScreen';
 
+
+
 const Stack = createStackNavigator();
 
 export default function App() {
