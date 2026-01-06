@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,21 +6,52 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
+  Alert,
+  Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { CustomButton } from '../../components/CustomButton';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
+import { useAuth } from '../../context/AuthContext';
 
 const EditProfileScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const [name, setName] = useState('Candy');
-  const [email, setEmail] = useState('candy@student.hcmut.edu.vn');
-  const [phone, setPhone] = useState('0123456789');
-  const [studentId, setStudentId] = useState('12345678');
+  const { user, refreshUser } = useAuth();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [studentId, setStudentId] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // Load user data when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [user])
+  );
+
+  const loadUserData = async () => {
+    try {
+      if (!user) {
+        await refreshUser();
+      }
+      if (user) {
+        setName(user.full_name || '');
+        setEmail(user.email || '');
+        setPhone(user.phone_number || '');
+        setStudentId(''); // Student ID không có trong backend, có thể lấy từ email
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const navItems = [
     { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
@@ -29,8 +60,9 @@ const EditProfileScreen = () => {
     { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'Profile' },
   ];
 
-  const handleSave = () => {
-    // TODO: Save profile changes
+  const handleSave = async () => {
+    // TODO: Implement update profile API
+    Alert.alert('Thông báo', 'Tính năng cập nhật profile đang được phát triển');
     navigation.goBack();
   };
 
@@ -45,23 +77,32 @@ const EditProfileScreen = () => {
         <View style={styles.headerPlaceholder} />
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Avatar Section */}
-        <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={48} color={Colors.primary} />
-          </View>
-          <TouchableOpacity style={styles.changePhotoButton}>
-            <Text style={styles.changePhotoText}>Change Photo</Text>
-          </TouchableOpacity>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
         </View>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Avatar Section */}
+          <View style={styles.avatarSection}>
+            <View style={styles.avatar}>
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person" size={48} color={Colors.primary} />
+              )}
+            </View>
+            <TouchableOpacity style={styles.changePhotoButton}>
+              <Text style={styles.changePhotoText}>Change Photo</Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* Form Section */}
-        <View style={styles.formSection}>
+          {/* Form Section */}
+          <View style={styles.formSection}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Full Name</Text>
             <TextInput
@@ -109,7 +150,8 @@ const EditProfileScreen = () => {
             />
           </View>
         </View>
-      </ScrollView>
+        </ScrollView>
+      )}
 
       {/* Save Button */}
       <View style={[styles.buttonSection, { paddingBottom: insets.bottom + 16 }]}>
@@ -207,6 +249,16 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: 0,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
 });
 

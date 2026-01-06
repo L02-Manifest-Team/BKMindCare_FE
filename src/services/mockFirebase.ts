@@ -14,7 +14,6 @@ class MockFirestore {
         }
         const doc = { id: Date.now().toString(), ...data };
         self.collections.get(name)!.push(doc);
-        console.log(`[MockFirestore] Added to ${name}:`, doc);
         return { id: doc.id };
       },
       get: async () => {
@@ -60,11 +59,10 @@ const mockDb = new MockFirestore();
 export const auth = {
   currentUser: null,
   signInWithEmailAndPassword: async (email: string, password: string) => {
-    console.log('[MockAuth] Sign in:', email);
     return { user: { uid: 'user1', email } };
   },
   signOut: async () => {
-    console.log('[MockAuth] Sign out');
+    // Mock sign out
   },
 };
 
@@ -87,7 +85,6 @@ export const db = {
 export const storage = {
   ref: (path: string) => ({
     put: async (file: any) => {
-      console.log('[MockStorage] Upload:', path);
       return { ref: { fullPath: path } };
     },
     getDownloadURL: async () => {

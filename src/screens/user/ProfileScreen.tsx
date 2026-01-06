@@ -1,61 +1,114 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
+  Image,
+  ActivityIndicator, // Keep ActivityIndicator as it's used later in the code
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native'; // Keep useFocusEffect as it's used later in the code
+import { useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
+import { useAuth } from '../../context/AuthContext';
 
 const ProfileScreen = () => {
   const navigation = useNavigation();
+  const { user, refreshUser, logout } = useAuth();
+  const [loading, setLoading] = useState(true);
+
+  // Fetch user data when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [])
+  );
+
+  const loadUserData = async () => {
+    try {
+      setLoading(true);
+      await refreshUser();
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Đăng xuất',
+      'Bạn có chắc chắn muốn đăng xuất?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Đăng xuất',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logout();
+              // Reset navigation stack to prevent going back
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                })
+              );
+            } catch (error) {
+              Alert.alert('Lỗi', 'Không thể đăng xuất. Vui lòng thử lại.');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const menuItems = [
     {
       id: '1',
-      title: 'Edit Profile',
+      title: 'Chỉnh sửa hồ sơ',
       icon: 'person-outline',
       onPress: () => navigation.navigate('EditProfile' as never),
     },
     {
       id: '2',
-      title: 'Appointment History',
+      title: 'Lịch sử hẹn',
       icon: 'calendar-outline',
       onPress: () => navigation.navigate('AppointmentHistory' as never),
     },
     {
       id: '3',
-      title: 'Mood History',
+      title: 'Lịch sử cảm xúc',
       icon: 'heart-outline',
       onPress: () => navigation.navigate('MoodHistory' as never),
     },
     {
       id: '4',
-      title: 'Settings',
+      title: 'Cài đặt',
       icon: 'settings-outline',
       onPress: () => navigation.navigate('Settings' as never),
     },
     {
       id: '5',
-      title: 'Help & Support',
+      title: 'Trợ giúp & Hỗ trợ',
       icon: 'help-circle-outline',
       onPress: () => navigation.navigate('FAQ' as never),
     },
     {
       id: '6',
-      title: 'About',
+      title: 'Giới thiệu',
       icon: 'information-circle-outline',
       onPress: () => navigation.navigate('About' as never),
     },
     {
       id: '7',
-      title: 'Logout',
+      title: 'Đăng xuất',
       icon: 'log-out-outline',
-      onPress: () => navigation.navigate('Login' as never),
+      onPress: handleLogout,
       color: Colors.error,
     },
   ];
@@ -72,68 +125,82 @@ const ProfileScreen = () => {
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         <View style={styles.content}>
-          {/* Profile Section */}
-          <View style={styles.profileSection}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={48} color={Colors.primary} />
-              </View>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
             </View>
-            <Text style={styles.userName}>Candy</Text>
-            <Text style={styles.userEmail}>candy@student.hcmut.edu.vn</Text>
-            <Text style={styles.userRole}>Student • HCMUT</Text>
-          </View>
-
-          {/* Stats Section */}
-          <View style={styles.statsSection}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>5</Text>
-              <Text style={styles.statLabel}>Appointments</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>12</Text>
-              <Text style={styles.statLabel}>Mood Check-ins</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>3</Text>
-              <Text style={styles.statLabel}>Tests Taken</Text>
-            </View>
-          </View>
-
-          {/* Menu Items */}
-          <View style={styles.menuSection}>
-            {menuItems.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.menuItem}
-                onPress={item.onPress}
-                activeOpacity={0.7}
-              >
-                <View style={styles.menuItemLeft}>
-                  <Ionicons
-                    name={item.icon as any}
-                    size={24}
-                    color={item.color || Colors.text}
-                  />
-                  <Text
-                    style={[
-                      styles.menuItemText,
-                      item.color && { color: item.color },
-                    ]}
-                  >
-                    {item.title}
-                  </Text>
+          ) : (
+            <>
+              {/* Profile Section */}
+              <View style={styles.profileSection}>
+                <View style={styles.avatarContainer}>
+                  <View style={styles.avatar}>
+                    {user?.avatar ? (
+                      <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+                    ) : (
+                      <Ionicons name="person" size={48} color={Colors.primary} />
+                    )}
+                  </View>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={Colors.textSecondary}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
+                <Text style={styles.userName}>{user?.full_name || 'User'}</Text>
+                <Text style={styles.userEmail}>{user?.email || ''}</Text>
+                <Text style={styles.userRole}>
+                  {user?.role === 'DOCTOR' ? 'Bác sĩ' : 'Sinh viên'} • {user?.phone_number || ''}
+                </Text>
+              </View>
+
+              {/* Stats Section */}
+              <View style={styles.statsSection}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>-</Text>
+                  <Text style={styles.statLabel}>Lịch hẹn</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>-</Text>
+                  <Text style={styles.statLabel}>Ghi nhận cảm xúc</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>-</Text>
+                  <Text style={styles.statLabel}>Bài kiểm tra</Text>
+                </View>
+              </View>
+
+              {/* Menu Items */}
+              <View style={styles.menuSection}>
+                {menuItems.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.menuItem}
+                    onPress={item.onPress}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.menuItemLeft}>
+                      <Ionicons
+                        name={item.icon as any}
+                        size={24}
+                        color={item.color || Colors.text}
+                      />
+                      <Text
+                        style={[
+                          styles.menuItemText,
+                          item.color && { color: item.color },
+                        ]}
+                      >
+                        {item.title}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={Colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -255,6 +322,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text,
     marginLeft: 16,
+  },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
 });
 

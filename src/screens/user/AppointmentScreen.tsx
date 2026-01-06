@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,25 +6,111 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { CustomButton } from '../../components/CustomButton';
-import { mockDoctors } from '../../constants/data';
-import { AppointmentType } from '../../types';
-import { db } from '../../config/firebase';
+import { appointmentService } from '../../services/appointmentService';
+import { doctorService } from '../../services/doctorService';
+import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
+import { notificationService } from '../../services/notificationService';
+
+interface Doctor {
+  id: number;
+  full_name: string;
+  specialization?: string;
+  rating?: number;
+  avatar?: string | null;
+}
 
 const AppointmentScreen = () => {
   const navigation = useNavigation();
+  const { user } = useAuth();
+  const { addNotification } = useNotifications();
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
-  const [selectedDoctor, setSelectedDoctor] = useState<string>('');
-  const [appointmentType, setAppointmentType] = useState<AppointmentType>('in-person');
+  const [selectedDoctor, setSelectedDoctor] = useState<number | null>(null);
+  const [appointmentType, setAppointmentType] = useState<'in-person' | 'anonymous-chat'>('in-person');
+  const [selectedLocation, setSelectedLocation] = useState<'co-so-1' | 'co-so-2' | null>(null);
+  const [reason, setReason] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(true);
 
-  const timeSlots = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+  const locations = [
+    { id: 'co-so-1', name: 'Cơ sở 1', address: '268 Lý Thường Kiệt' },
+    { id: 'co-so-2', name: 'Cơ sở 2', address: 'Dĩ An' },
+  ];
+
+  const allTimeSlots = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+
+  // Get available time slots based on selected date
+  const getAvailableTimeSlots = useCallback(() => {
+    if (!selectedDate) {
+      return allTimeSlots;
+    }
+
+    const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isToday = selectedDateObj.toDateString() === today.toDateString();
+
+    if (!isToday) {
+      // If not today, all slots are available
+      return allTimeSlots;
+    }
+
+    // If today, filter slots that are at least 2 hours from now
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTimeInMinutes = currentHour * 60 + currentMinute;
+    const twoHoursFromNow = currentTimeInMinutes + 120; // 2 hours = 120 minutes
+
+    return allTimeSlots.filter((slot) => {
+      const [hours, minutes] = slot.split(':').map(Number);
+      const slotTimeInMinutes = hours * 60 + minutes;
+      return slotTimeInMinutes >= twoHoursFromNow;
+    });
+  }, [selectedDate]);
+
+  const timeSlots = getAvailableTimeSlots();
+
+  // Load doctors on mount
+  useEffect(() => {
+    loadDoctors();
+  }, []);
+
+  // Reset selected time when date changes
+  useEffect(() => {
+    if (selectedDate) {
+      const availableSlots = getAvailableTimeSlots();
+      // If current selected time is not available, reset it
+      if (selectedTime && !availableSlots.includes(selectedTime)) {
+        setSelectedTime('');
+      }
+    } else {
+      // Reset time when date is cleared
+      setSelectedTime('');
+    }
+  }, [selectedDate, getAvailableTimeSlots, selectedTime]);
+
+  const loadDoctors = async () => {
+    try {
+      setLoadingDoctors(true);
+      const response = await doctorService.getDoctors(1, 50);
+      setDoctors(response.data);
+    } catch (error) {
+      Alert.alert('Lỗi', 'Không thể tải danh sách bác sĩ');
+    } finally {
+      setLoadingDoctors(false);
+    }
+  };
 
   const handleBookAppointment = async () => {
     if (!selectedDate || !selectedTime || !selectedDoctor) {
@@ -32,40 +118,103 @@ const AppointmentScreen = () => {
       return;
     }
 
+    if (!reason.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập lý do đặt lịch');
+      return;
+    }
+
+    if (appointmentType === 'in-person' && !selectedLocation) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn địa điểm');
+      return;
+    }
+
     setLoading(true);
     try {
-      const appointment = {
-        doctorId: selectedDoctor,
-        patientId: 'user1', // TODO: Get from auth context
-        date: selectedDate,
-        time: selectedTime,
-        type: appointmentType,
-        location: appointmentType === 'in-person' ? 'BK.D6' : undefined,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      };
+      const locationInfo = appointmentType === 'in-person' && selectedLocation
+        ? locations.find(loc => loc.id === selectedLocation)?.address || ''
+        : '';
+      
+      const notes = appointmentType === 'anonymous-chat' 
+        ? 'Anonymous chat appointment'
+        : `In-person appointment - ${locationInfo}`;
 
-      await db.collection('appointments').add(appointment);
+      const appointment = await appointmentService.createAppointment({
+        doctor_id: selectedDoctor,
+        appointment_date: selectedDate,
+        time_slot: selectedTime,
+        reason: reason.trim(),
+        notes: notes,
+      });
+
+      // Create in-app notification
+      const doctorName = doctor?.full_name || 'Bác sĩ';
+      const appointmentDate = new Date(selectedDate).toLocaleDateString('vi-VN');
+      const notificationTitle = 'Đã đặt lịch hẹn thành công';
+      const notificationMessage = `Lịch hẹn với ${doctorName} vào ${appointmentDate} lúc ${selectedTime} đã được gửi. Chờ bác sĩ xác nhận.`;
+      
+      await addNotification({
+        type: 'appointment',
+        title: notificationTitle,
+        message: notificationMessage,
+        appointmentId: appointment.id,
+      });
+
+      // Send push notification
+      await notificationService.sendPushNotification(
+        notificationTitle,
+        notificationMessage,
+        {
+          type: 'appointment',
+          appointmentId: appointment.id,
+        }
+      );
 
       Alert.alert(
         'Thành công',
-        'Lịch hẹn của bạn đã được gửi. Chúng tôi sẽ xác nhận sớm nhất có thể.',
+        'Lịch hẹn của bạn đã được gửi. Chờ bác sĩ xác nhận.',
         [
           {
             text: 'OK',
-            onPress: () => navigation.goBack(),
+            onPress: () => (navigation as any).navigate('AppointmentHistory'),
           },
         ]
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error booking appointment:', error);
-      Alert.alert('Lỗi', 'Không thể đặt lịch. Vui lòng thử lại.');
+      
+      // Parse error message
+      let errorMessage = 'Không thể đặt lịch. Vui lòng thử lại.';
+      if (error.message) {
+        if (error.message.includes('not available')) {
+          errorMessage = 'Bác sĩ không khả dụng ở khung giờ này. Vui lòng chọn khung giờ khác hoặc ngày khác.';
+        } else if (error.message.includes('already have an appointment')) {
+          errorMessage = 'Bạn đã có lịch hẹn ở khung giờ này. Vui lòng chọn khung giờ khác.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert(
+        'Không thể đặt lịch',
+        errorMessage,
+        [
+          {
+            text: 'Chọn khung giờ khác',
+            onPress: () => setSelectedTime(''),
+            style: 'default',
+          },
+          {
+            text: 'OK',
+            style: 'cancel',
+          },
+        ]
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const doctor = mockDoctors.find((d) => d.id === selectedDoctor);
+  const doctor = doctors.find((d) => d.id === selectedDoctor);
 
   return (
     <View style={styles.container}>
@@ -83,7 +232,10 @@ const AppointmentScreen = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chọn bác sĩ</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {mockDoctors.map((doc) => (
+            {loadingDoctors ? (
+              <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 20 }} />
+            ) : (
+              doctors.map((doc) => (
               <TouchableOpacity
                 key={doc.id}
                 style={[
@@ -95,14 +247,15 @@ const AppointmentScreen = () => {
                 <View style={styles.doctorAvatarContainer}>
                   <Ionicons name="person" size={32} color={Colors.primary} />
                 </View>
-                <Text style={styles.doctorName}>{doc.name}</Text>
-                <Text style={styles.doctorSpecialty}>{doc.specialization}</Text>
+                <Text style={styles.doctorName}>{doc.full_name}</Text>
+                <Text style={styles.doctorSpecialty}>{doc.specialization || 'Chuyên gia'}</Text>
                 <View style={styles.ratingContainer}>
                   <Ionicons name="star" size={12} color={Colors.warning} />
-                  <Text style={styles.rating}>{doc.rating}</Text>
+                  <Text style={styles.rating}>{doc.rating || 5.0}</Text>
                 </View>
               </TouchableOpacity>
-            ))}
+            ))
+          )}
           </ScrollView>
         </View>
 
@@ -131,27 +284,66 @@ const AppointmentScreen = () => {
         {/* Time Selection */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chọn giờ</Text>
-          <View style={styles.timeGrid}>
-            {timeSlots.map((time) => (
-              <TouchableOpacity
-                key={time}
-                style={[
-                  styles.timeSlot,
-                  selectedTime === time && styles.selectedTimeSlot,
-                ]}
-                onPress={() => setSelectedTime(time)}
-              >
-                <Text
-                  style={[
-                    styles.timeText,
-                    selectedTime === time && styles.selectedTimeText,
-                  ]}
-                >
-                  {time}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {!selectedDate ? (
+            <View style={styles.warningContainer}>
+              <Ionicons name="information-circle-outline" size={20} color={Colors.warning} />
+              <Text style={styles.warningText}>Vui lòng chọn ngày trước</Text>
+            </View>
+          ) : timeSlots.length === 0 ? (
+            <View style={styles.warningContainer}>
+              <Ionicons name="alert-circle-outline" size={20} color={Colors.error} />
+              <Text style={styles.warningText}>
+                Không còn khung giờ trống trong ngày hôm nay. Vui lòng chọn ngày khác.
+              </Text>
+            </View>
+          ) : (
+            <>
+              {selectedDate && new Date(selectedDate).toDateString() === new Date().toDateString() && (
+                <View style={styles.infoContainer}>
+                  <Ionicons name="information-circle-outline" size={16} color={Colors.primary} />
+                  <Text style={styles.infoText}>
+                    Phải đặt trước ít nhất 2 giờ. Các khung giờ dưới đây là khả dụng.
+                  </Text>
+                </View>
+              )}
+              <View style={styles.timeGrid}>
+                {timeSlots.map((time) => (
+                  <TouchableOpacity
+                    key={time}
+                    style={[
+                      styles.timeSlot,
+                      selectedTime === time && styles.selectedTimeSlot,
+                    ]}
+                    onPress={() => setSelectedTime(time)}
+                  >
+                    <Text
+                      style={[
+                        styles.timeText,
+                        selectedTime === time && styles.selectedTimeText,
+                      ]}
+                    >
+                      {time}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+        </View>
+
+        {/* Reason Input */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Lý do đặt lịch *</Text>
+          <TextInput
+            style={styles.reasonInput}
+            placeholder="Nhập lý do bạn muốn gặp bác sĩ..."
+            placeholderTextColor={Colors.textSecondary}
+            value={reason}
+            onChangeText={setReason}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
         </View>
 
         {/* Appointment Type */}
@@ -182,29 +374,62 @@ const AppointmentScreen = () => {
             <TouchableOpacity
               style={[
                 styles.typeOption,
-                appointmentType === 'video-call' && styles.selectedTypeOption,
+                appointmentType === 'anonymous-chat' && styles.selectedTypeOption,
               ]}
-              onPress={() => setAppointmentType('video-call')}
+              onPress={() => setAppointmentType('anonymous-chat')}
             >
               <View style={styles.radioButton}>
-                {appointmentType === 'video-call' && (
+                {appointmentType === 'anonymous-chat' && (
                   <View style={styles.radioButtonInner} />
                 )}
               </View>
               <Text
                 style={[
                   styles.typeText,
-                  appointmentType === 'video-call' && styles.selectedTypeText,
+                  appointmentType === 'anonymous-chat' && styles.selectedTypeText,
                 ]}
               >
-                Video call
+                Chat ẩn danh
               </Text>
             </TouchableOpacity>
           </View>
           {appointmentType === 'in-person' && (
-            <View style={styles.locationContainer}>
-              <Ionicons name="location" size={20} color={Colors.primary} />
-              <Text style={styles.locationText}>Địa điểm: BK.D6</Text>
+            <View style={styles.locationSelectionContainer}>
+              <Text style={styles.locationTitle}>Chọn địa điểm *</Text>
+              {locations.map((location) => (
+                <TouchableOpacity
+                  key={location.id}
+                  style={[
+                    styles.locationOption,
+                    selectedLocation === location.id && styles.selectedLocationOption,
+                  ]}
+                  onPress={() => setSelectedLocation(location.id as 'co-so-1' | 'co-so-2')}
+                >
+                  <View style={styles.radioButton}>
+                    {selectedLocation === location.id && (
+                      <View style={styles.radioButtonInner} />
+                    )}
+                  </View>
+                  <View style={styles.locationInfo}>
+                    <Text
+                      style={[
+                        styles.locationName,
+                        selectedLocation === location.id && styles.selectedLocationText,
+                      ]}
+                    >
+                      {location.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.locationAddress,
+                        selectedLocation === location.id && styles.selectedLocationAddress,
+                      ]}
+                    >
+                      {location.address}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </View>
@@ -215,7 +440,7 @@ const AppointmentScreen = () => {
             <Text style={styles.summaryTitle}>Tóm tắt</Text>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Bác sĩ:</Text>
-              <Text style={styles.summaryValue}>{doctor?.name}</Text>
+              <Text style={styles.summaryValue}>{doctor?.full_name}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Ngày:</Text>
@@ -230,9 +455,17 @@ const AppointmentScreen = () => {
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Loại:</Text>
               <Text style={styles.summaryValue}>
-                {appointmentType === 'in-person' ? 'Trực tiếp' : 'Video call'}
+                {appointmentType === 'in-person' ? 'Trực tiếp' : 'Chat ẩn danh'}
               </Text>
             </View>
+            {appointmentType === 'in-person' && selectedLocation && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Địa điểm:</Text>
+                <Text style={styles.summaryValue}>
+                  {locations.find(loc => loc.id === selectedLocation)?.name} - {locations.find(loc => loc.id === selectedLocation)?.address}
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -242,7 +475,7 @@ const AppointmentScreen = () => {
         <CustomButton
           title="Đặt lịch hẹn"
           onPress={handleBookAppointment}
-          disabled={!selectedDate || !selectedTime || !selectedDoctor}
+          disabled={!selectedDate || !selectedTime || !selectedDoctor || (appointmentType === 'in-person' && !selectedLocation)}
           loading={loading}
         />
       </View>
@@ -392,18 +625,57 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
   },
-  locationContainer: {
+  locationSelectionContainer: {
+    marginTop: 12,
+  },
+  locationTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  locationOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    padding: 12,
+    padding: 16,
+    borderRadius: 12,
     backgroundColor: Colors.backgroundLight,
-    borderRadius: 8,
+    marginBottom: 12,
   },
-  locationText: {
-    fontSize: 14,
+  selectedLocationOption: {
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  locationInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  locationName: {
+    fontSize: 16,
+    fontWeight: '500',
     color: Colors.text,
-    marginLeft: 8,
+    marginBottom: 4,
+  },
+  selectedLocationText: {
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  locationAddress: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  selectedLocationAddress: {
+    color: Colors.text,
+  },
+  reasonInput: {
+    backgroundColor: Colors.backgroundLight,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: Colors.text,
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
   summaryCard: {
     margin: 16,
@@ -437,6 +709,36 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     backgroundColor: Colors.background,
+  },
+  warningContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: Colors.error + '20',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.error,
+    marginLeft: 8,
+    lineHeight: 20,
+  },
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.text,
+    marginLeft: 8,
+    lineHeight: 20,
   },
 });
 

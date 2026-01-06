@@ -1,316 +1,109 @@
-# BKMindCare - Ứng dụng Chăm sóc Sức khỏe Tâm thần
+# BKMindCare - Mental Health Support Application
 
-## ✨ Tính năng chính
+BKMindCare is a comprehensive mobile application designed to support mental health for students and connect them with psychological experts (doctors/psychologists). The app features a dual-interface system serving two distinct user roles: **Students (Patients)** and **Doctors**.
 
-### 👤 Dành cho Người dùng (User)
-- **Dashboard cá nhân**: Xem tổng quan về tình trạng sức khỏe tâm thần
-- **Theo dõi tâm trạng (Mood Check-in)**: Ghi lại cảm xúc hàng ngày với 4 loại tâm trạng:
-  - Happy (Vui vẻ) - Màu tím
-  - Calm (Bình tĩnh) - Màu xanh dương
-  - Relax (Thư giãn) - Màu cam
-  - Focus (Tập trung) - Màu xanh ngọc
-- **Lịch sử tâm trạng**: Xem biểu đồ và lịch sử các lần check-in
-- **Đặt lịch hẹn**: Đặt lịch hẹn với bác sĩ (trực tiếp hoặc video call)
-- **Lịch sử cuộc hẹn**: Xem tất cả các cuộc hẹn đã đặt
-- **Danh sách bác sĩ**: Xem thông tin các bác sĩ có sẵn
-- **Chat tư vấn**: Trò chuyện với bác sĩ để được tư vấn
-- **Kiểm tra sức khỏe tâm thần**: Thực hiện các bài test đánh giá
-- **FAQ**: Câu hỏi thường gặp
-- **Thông báo**: Nhận thông báo về cuộc hẹn và tin nhắn
-- **Hồ sơ cá nhân**: Quản lý thông tin tài khoản
+## 🚀 Tech Stack
 
-### 👨‍⚕️ Dành cho Bác sĩ (Doctor)
-- **Dashboard bác sĩ**: Xem tổng quan về lịch hẹn và bệnh nhân
-- **Quản lý cuộc hẹn**: Xem chi tiết và quản lý các cuộc hẹn
-- **Expert Dashboard**: Bảng điều khiển chuyên sâu cho chuyên gia
+- **Frontend:** React Native (Expo), TypeScript, React Navigation, Gifted Chat
+- **Backend:** Python (FastAPI), WebSockets
+- **Database:** SQLite / PostgreSQL (via SQLAlchemy)
+- **Communication:** Real-time Chat (Socket.IO/WebSocket), RESTful APIs
 
-## 🛠️ Công nghệ sử dụng
+## ✨ Key Features
 
-### Framework & Libraries
-- **React Native**: 0.81.5
-- **Expo**: ^54.0.25
-- **React**: 19.1.0
-- **TypeScript**: ^5.1.3
+### 👤 For Students (Patients)
 
-### Navigation
-- **@react-navigation/native**: ^6.1.9
-- **@react-navigation/stack**: ^6.3.20
-- **@react-navigation/bottom-tabs**: ^6.5.11
+**1. Mental Health Tracking**
+- **Mood Check-in:** Daily emotional status tracking with emoji selectors and notes.
+- **Mood History:** Visual calendar and statistics of emotional trends over time.
+- **Journaling:** Personal diary to record thoughts and feelings.
+- **Mental Health Tests:** Self-assessment tests to evaluate mental state (`MentalHealthTest`).
 
-### UI Components & Icons
-- **@expo/vector-icons**: ^15.0.3
-- **react-native-vector-icons**: ^10.0.3
-- **react-native-calendars**: ^1.1301.0
-- **react-native-gifted-chat**: ^2.4.0
+**2. Consultation & Appointments**
+- **Find Doctors:** Browse list of available psychologists with detailed profiles and specializations.
+- **Book Appointments:** Schedule online (video call) or in-person consultations.
+- **Appointment Management:** View upcoming, pending, and past appointments; reschedule or cancel as needed.
 
-### Storage & State Management
-- **@react-native-async-storage/async-storage**: 2.2.0
-- **React Context API**: Quản lý authentication state
+**3. Communication**
+- **Real-time Chat:** Direct messaging with connected doctors.
+- **Notification System:** Updates on appointment status and new messages.
 
-### Utilities
-- **react-native-gesture-handler**: ~2.28.0
-- **react-native-reanimated**: ~4.1.1
-- **react-native-safe-area-context**: ~5.6.0
-- **react-native-screens**: ~4.16.0
-- **@react-native-community/datetimepicker**: 8.4.4
-
-## 📁 Cấu trúc dự án
-
-```
-btl/
-├── App.tsx                      # Entry point của ứng dụng
-├── app.json                     # Cấu hình Expo
-├── package.json                 # Dependencies và scripts
-├── tsconfig.json               # Cấu hình TypeScript
-├── babel.config.js             # Cấu hình Babel
-├── metro.config.js             # Cấu hình Metro bundler
-│
-└── src/
-    ├── components/             # Các component tái sử dụng
-    │   ├── CustomButton.tsx
-    │   ├── EmotionalTendenciesChart.tsx
-    │   └── MoodSelector.tsx
-    │
-    ├── config/                 # Cấu hình
-    │   └── firebase.ts         # Cấu hình Firebase (hiện tại dùng mock)
-    │
-    ├── constants/              # Hằng số
-    │   ├── colors.ts           # Màu sắc của ứng dụng
-    │   └── data.ts             # Dữ liệu mock (doctors, appointments)
-    │
-    ├── context/                # React Context
-    │   └── AuthContext.tsx     # Context quản lý authentication
-    │
-    ├── hooks/                  # Custom hooks
-    │   └── useMoodCheckIn.ts   # Hook quản lý mood check-in
-    │
-    ├── screens/                # Các màn hình
-    │   ├── SplashScreen.tsx
-    │   ├── OnboardingScreen.tsx
-    │   ├── LoginScreen.tsx
-    │   ├── NotificationScreen.tsx
-    │   │
-    │   ├── user/               # Màn hình cho người dùng
-    │   │   ├── UserDashboard.tsx
-    │   │   ├── MoodCheckInScreen.tsx
-    │   │   ├── MoodHistoryScreen.tsx
-    │   │   ├── AppointmentScreen.tsx
-    │   │   ├── AppointmentHistoryScreen.tsx
-    │   │   ├── AllDoctorsScreen.tsx
-    │   │   ├── ChatScreen.tsx
-    │   │   ├── MentalHealthTestScreen.tsx
-    │   │   ├── FAQScreen.tsx
-    │   │   └── ProfileScreen.tsx
-    │   │
-    │   └── doctor/             # Màn hình cho bác sĩ
-    │       ├── DoctorDashboard.tsx
-    │       ├── ExpertDashboard.tsx
-    │       └── DetailAppointmentScreen.tsx
-    │
-    ├── services/               # Services
-    │   └── mockFirebase.ts     # Mock Firebase service (cho testing)
-    │
-    ├── types/                   # TypeScript types
-    │   └── index.ts            # Định nghĩa các types và interfaces
-    │
-    └── utils/                   # Utilities
-        └── storage.ts           # Wrapper cho AsyncStorage
-```
-
-## 🚀 Cài đặt và Chạy dự án
-
-### Yêu cầu hệ thống
-- Node.js (phiên bản 16 trở lên)
-- npm hoặc yarn
-- Expo CLI (cài đặt global: `npm install -g expo-cli`)
-- Android Studio (cho Android) hoặc Xcode (cho iOS)
-
-### Các bước cài đặt
-
-1. **Clone repository**
-```bash
-git clone <repository-url>
-cd btl
-```
-
-2. **Cài đặt dependencies**
-```bash
-npm install
-```
-
-3. **Chạy ứng dụng**
-```bash
-# Khởi động Expo development server
-npm start
-
-# Hoặc chạy trên Android
-npm run android
-
-# Hoặc chạy trên iOS
-npm run ios
-
-# Hoặc chạy trên Web
-npm run web
-
-# Xóa cache và khởi động lại
-npm run clear
-```
-
-4. **Quét QR code**
-   - Mở ứng dụng Expo Go trên điện thoại
-   - Quét QR code hiển thị trong terminal hoặc trình duyệt
-
-## 🔐 Authentication
-
-Hiện tại ứng dụng sử dụng mock authentication. Có hai loại đăng nhập:
-- **HCMUT Account**: Đăng nhập bằng tài khoản HCMUT (chưa được implement)
-- **Admin**: Đăng nhập với quyền admin/bác sĩ
-
-Thông tin người dùng được lưu trữ local bằng AsyncStorage.
-
-## 🗄️ Database & Backend
-
-### Mock Firebase
-Ứng dụng hiện tại sử dụng **Mock Firebase** (`src/services/mockFirebase.ts`) để phục vụ việc phát triển và testing UI mà không cần backend thực sự.
-
-Mock Firebase cung cấp:
-- **Mock Auth**: Authentication giả lập
-- **Mock Firestore**: Database giả lập với các collections:
-  - `moodCheckIns`: Lưu trữ các lần check-in tâm trạng
-  - `appointments`: Lưu trữ các cuộc hẹn
-  - `chats/{chatId}/messages`: Lưu trữ tin nhắn chat
-- **Mock Storage**: File storage giả lập
-
-### Chuyển sang Firebase thật
-Để sử dụng Firebase thật, thực hiện các bước sau:
-
-1. Cài đặt Firebase SDK:
-```bash
-npm install firebase
-```
-
-2. Cập nhật file `src/config/firebase.ts`:
-   - Uncomment code Firebase
-   - Thêm thông tin cấu hình Firebase của bạn
-   - Comment lại import mockFirebase
-
-3. Cấu hình Firebase:
-```typescript
-const firebaseConfig = {
-  apiKey: "your-api-key",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "your-app-id"
-};
-```
-
-## 📊 Types & Interfaces
-
-### User Roles
-- `student`: Sinh viên
-- `doctor`: Bác sĩ
-- `admin`: Quản trị viên
-
-### Mood Types
-- `happy`: Vui vẻ
-- `calm`: Bình tĩnh
-- `relax`: Thư giãn
-- `focus`: Tập trung
-
-### Appointment Types
-- `in-person`: Gặp trực tiếp
-- `video-call`: Gọi video
-
-### Appointment Status
-- `pending`: Đang chờ
-- `confirmed`: Đã xác nhận
-- `completed`: Đã hoàn thành
-- `cancelled`: Đã hủy
-
-## 🎨 Design System
-
-### Màu sắc chính
-- **Primary**: `#4A90E2` (Xanh dương)
-- **Primary Light**: `#E3F2FD` (Xanh dương nhạt)
-- **Success**: `#4CAF50` (Xanh lá)
-- **Warning**: `#FFC107` (Vàng)
-- **Error**: `#F44336` (Đỏ)
-- **Teal**: `#26A69A` (Xanh ngọc)
-- **Purple**: `#9C27B0` (Tím)
-
-Xem chi tiết trong `src/constants/colors.ts`
-
-## 📱 Navigation Flow
-
-```
-Splash Screen
-    ↓
-Onboarding Screen (lần đầu)
-    ↓
-Login Screen
-    ↓
-    ├─→ User Dashboard (nếu đăng nhập user)
-    │       ├─→ Mood Check-in
-    │       ├─→ Mood History
-    │       ├─→ Appointment
-    │       ├─→ Appointment History
-    │       ├─→ All Doctors
-    │       ├─→ Chat
-    │       ├─→ Mental Health Test
-    │       ├─→ FAQ
-    │       └─→ Profile
-    │
-    └─→ Doctor Dashboard (nếu đăng nhập admin)
-            ├─→ Expert Dashboard
-            └─→ Detail Appointment
-```
-
-## 🔧 Scripts có sẵn
-
-- `npm start`: Khởi động Expo development server
-- `npm run android`: Chạy trên Android emulator/device
-- `npm run ios`: Chạy trên iOS simulator/device
-- `npm run web`: Chạy trên web browser
-- `npm run clear`: Xóa cache và khởi động lại
-
-## 📝 Ghi chú phát triển
-
-### TODO
-- [ ] Implement HCMUT authentication
-- [ ] Implement admin authentication
-- [ ] Tích hợp Firebase thật
-- [ ] Thêm push notifications
-- [ ] Cải thiện error handling
-- [ ] Thêm unit tests
-- [ ] Thêm integration tests
-
-### Mock Data
-Dữ liệu mock được định nghĩa trong:
-- `src/constants/data.ts`: Mock doctors và appointments
-- `src/services/mockFirebase.ts`: Mock Firebase services
-
-## 🤝 Đóng góp
-
-1. Fork dự án
-2. Tạo feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit các thay đổi (`git commit -m 'Add some AmazingFeature'`)
-4. Push lên branch (`git push origin feature/AmazingFeature`)
-5. Mở Pull Request
-
-## 📄 License
-
-Dự án này là private project.
-
-## 👥 Tác giả
-
-Dự án được phát triển cho môn học Mobile Development - BTL.
-
-## 📞 Liên hệ
-
-Nếu có câu hỏi hoặc vấn đề, vui lòng tạo issue trên repository.
+**4. Account Management**
+- **Profile:** Manage personal information.
+- **Settings & Support:** Customization options and FAQ support.
 
 ---
 
-**Lưu ý**: Đây là phiên bản phát triển sử dụng mock data. Để sử dụng trong production, cần tích hợp backend thật và cấu hình Firebase đầy đủ.
+### 👨‍⚕️ For Doctors
+
+**1. Professional Dashboard**
+- **Overview Stats:** At-a-glance view of total patients, today's appointments, and message counts.
+- **Upcoming Appointments:** Quick access to the next 3 scheduled consultations.
+- **Reviews & Ratings:** View patient feedback and star ratings.
+
+**2. Appointment Management**
+- **Calendar View:** Manage schedule via a calendar interface (`DoctorCalendar`).
+- **Request Approval:** Review, accept, or reject pending appointment requests from students.
+- **Appointment Details:** Access detailed patient info and session notes.
+
+**3. Patient Management**
+- **Patient Stats:** Track patient interaction statistics.
+- **Chat:** Communicate with patients securely.
+- **History:** Review past consultations.
+
+**4. Personal Profile**
+- **Professional Info:** Update specialization, bio, and availability.
+- **Settings:** Configure app preferences.
+
+## 🛠️ Installation & Setup
+
+### Prerequisites
+- Node.js & npm/yarn
+- Python 3.8+
+- Expo Go (for mobile testing)
+
+### Backend Setup
+1. Navigate to `BE` directory:
+   ```bash
+   cd BE/BKMindCare_BE
+   ```
+2. Create virtual environment and install dependencies:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # or venv\Scripts\activate on Windows
+   pip install -r requirements.txt
+   ```
+3. Run the server:
+   ```bash
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+   *Server will start at `http://localhost:8000`*
+
+### Frontend Setup
+1. Navigate to `FE` directory:
+   ```bash
+   cd FE/BKMindCare_FE
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the Expo app:
+   ```bash
+   npx expo start
+   ```
+4. Scan the QR code with **Expo Go** on your Android/iOS device.
+
+## 📝 Recent Updates (Walkthrough)
+
+- **Cross-Account Fixes:** Resolved token conflict issues when switching between User and Doctor accounts.
+- **Navigation:** Implemented secure logout with navigation stack reset.
+- **Chat System:** Unified Chat UI, fixed critical race conditions, and infinite loading loops.
+- **Doctor Dashboard:** Added "Upcoming Appointments" section and translated UI to Vietnamese.
+
+## 👥 Authors
+
+- **Huynh Minh Tien** - *Developer*
+- **Dang Thi Thuy Vi** - *Developer*
+- **Nguyen Ngoc Truc Quynh** - *Developer*
+- **Tran Nguyen Phu Nghia** - *Developer*

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { appointmentService, AppointmentWithRelations } from '../../services/appointmentService';
 
-const AppointmentHistoryScreen = () => {
+const UpcomingAppointmentsScreen = () => {
   const navigation = useNavigation();
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'upcoming' | 'past'>('all');
   const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -27,10 +26,26 @@ const AppointmentHistoryScreen = () => {
       const response = await appointmentService.getAppointments({
         limit: 100, // Get all appointments
       });
-      setAppointments(response.data || []);
+      
+      // Filter upcoming appointments
+      const now = new Date();
+      const upcoming = (response.data || []).filter((apt) => {
+        const appointmentDate = new Date(`${apt.appointment_date}T${apt.time_slot}`);
+        return appointmentDate >= now && 
+               (apt.status === 'PENDING' || apt.status === 'CONFIRMED');
+      });
+      
+      // Sort by date (earliest first)
+      upcoming.sort((a, b) => {
+        const dateA = new Date(`${a.appointment_date}T${a.time_slot}`);
+        const dateB = new Date(`${b.appointment_date}T${b.time_slot}`);
+        return dateA.getTime() - dateB.getTime();
+      });
+      
+      setAppointments(upcoming);
     } catch (error: any) {
-      console.error('Error loading appointments:', error);
-      Alert.alert('Lỗi', error.message || 'Không thể tải lịch sử lịch hẹn');
+      console.error('Error loading upcoming appointments:', error);
+      Alert.alert('Lỗi', error.message || 'Không thể tải lịch sắp tới');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -48,13 +63,11 @@ const AppointmentHistoryScreen = () => {
     loadAppointments();
   }, [loadAppointments]);
 
-  // Format date from YYYY-MM-DD to "DD/MM/YYYY"
+  // Format date from YYYY-MM-DD to "MMM DD, YYYY"
   const formatDate = (dateStr: string): string => {
     const date = new Date(dateStr);
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   };
 
   // Format time from HH:MM to "HH:MM AM/PM"
@@ -66,33 +79,10 @@ const AppointmentHistoryScreen = () => {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  // Determine if appointment is upcoming or past
-  const isUpcoming = (appointment: AppointmentWithRelations): boolean => {
-    const appointmentDate = new Date(`${appointment.appointment_date}T${appointment.time_slot}`);
-    return appointmentDate >= new Date() && 
-           (appointment.status === 'PENDING' || appointment.status === 'CONFIRMED');
-  };
-
-  const isPast = (appointment: AppointmentWithRelations): boolean => {
-    const appointmentDate = new Date(`${appointment.appointment_date}T${appointment.time_slot}`);
-    return appointmentDate < new Date() || appointment.status === 'COMPLETED';
-  };
-
-  const filteredAppointments = appointments.filter((apt) => {
-    if (selectedFilter === 'all') return true;
-    if (selectedFilter === 'upcoming') return isUpcoming(apt);
-    return isPast(apt);
-  });
-
   const getStatusColor = (status: string) => {
     switch (status.toUpperCase()) {
       case 'CONFIRMED':
         return Colors.success;
-      case 'COMPLETED':
-        return Colors.primary;
-      case 'CANCELLED':
-      case 'REJECTED':
-        return Colors.error;
       case 'PENDING':
         return Colors.warning || Colors.textSecondary;
       default:
@@ -103,23 +93,17 @@ const AppointmentHistoryScreen = () => {
   const getStatusLabel = (status: string): string => {
     switch (status.toUpperCase()) {
       case 'PENDING':
-        return 'Chờ xác nhận';
+        return 'Đang chờ';
       case 'CONFIRMED':
         return 'Đã xác nhận';
-      case 'COMPLETED':
-        return 'Hoàn thành';
-      case 'CANCELLED':
-        return 'Đã hủy';
-      case 'REJECTED':
-        return 'Đã từ chối';
       default:
         return status.toLowerCase();
     }
   };
 
-  const getAppointmentType = (notes?: string): 'anonymous-chat' | 'in-person' => {
-    if (notes?.toLowerCase().includes('anonymous chat')) {
-      return 'anonymous-chat';
+  const getAppointmentType = (notes?: string): 'video-call' | 'in-person' => {
+    if (notes?.toLowerCase().includes('video')) {
+      return 'video-call';
     }
     return 'in-person';
   };
@@ -130,37 +114,14 @@ const AppointmentHistoryScreen = () => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Lịch sử cuộc hẹn</Text>
+        <Text style={styles.headerTitle}>Lịch sắp tới</Text>
         <View style={styles.placeholder} />
-      </View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        {(['all', 'upcoming', 'past'] as const).map((filter) => (
-          <TouchableOpacity
-            key={filter}
-            style={[
-              styles.filterTab,
-              selectedFilter === filter && styles.selectedFilterTab,
-            ]}
-            onPress={() => setSelectedFilter(filter)}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedFilter === filter && styles.selectedFilterText,
-              ]}
-            >
-              {filter === 'all' ? 'Tất cả' : filter === 'upcoming' ? 'Sắp tới' : 'Đã qua'}
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
 
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Đang tải lịch sử...</Text>
+          <Text style={styles.loadingText}>Đang tải lịch sắp tới...</Text>
         </View>
       ) : (
         <ScrollView 
@@ -170,21 +131,21 @@ const AppointmentHistoryScreen = () => {
           }
         >
           <View style={styles.content}>
-            {filteredAppointments.length === 0 ? (
+            {appointments.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Ionicons name="calendar-outline" size={64} color={Colors.textSecondary} />
-                <Text style={styles.emptyText}>Chưa có lịch hẹn nào</Text>
+                <Text style={styles.emptyText}>Chưa có lịch hẹn sắp tới</Text>
               </View>
             ) : (
-              filteredAppointments.map((appointment) => {
-                const appointmentType = getAppointmentType(appointment.notes || undefined);
+              appointments.map((appointment) => {
+                const appointmentType = getAppointmentType(appointment.notes);
                 return (
                   <TouchableOpacity
                     key={appointment.id}
                     style={styles.appointmentCard}
-                    onPress={() => (navigation as any).navigate('AppointmentDetail', { 
+                    onPress={() => navigation.navigate('AppointmentDetail' as never, { 
                       appointmentId: appointment.id 
-                    })}
+                    } as never)}
                   >
                     <View style={styles.appointmentHeader}>
                       <View style={styles.doctorAvatar}>
@@ -206,12 +167,12 @@ const AppointmentHistoryScreen = () => {
                         <View style={styles.appointmentMeta}>
                           <View style={styles.typeBadge}>
                             <Ionicons
-                              name={appointmentType === 'anonymous-chat' ? 'chatbubbles' : 'location'}
+                              name={appointmentType === 'video-call' ? 'videocam' : 'location'}
                               size={12}
                               color={Colors.primary}
                             />
                             <Text style={styles.typeText}>
-                              {appointmentType === 'anonymous-chat' ? 'Chat ẩn danh' : 'Trực tiếp'}
+                              {appointmentType === 'video-call' ? 'Video Call' : 'In-person'}
                             </Text>
                           </View>
                           <View
@@ -265,30 +226,16 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 24,
   },
-  filterContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 8,
-  },
-  filterTab: {
+  loadingContainer: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.backgroundLight,
+    justifyContent: 'center',
     alignItems: 'center',
+    padding: 32,
   },
-  selectedFilterTab: {
-    backgroundColor: Colors.primary,
-  },
-  filterText: {
-    fontSize: 14,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
     color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  selectedFilterText: {
-    color: Colors.background,
-    fontWeight: '600',
   },
   content: {
     padding: 16,
@@ -310,6 +257,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.primary,
   },
   appointmentInfo: {
     flex: 1,
@@ -352,18 +304,6 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: Colors.textSecondary,
   },
   emptyContainer: {
     flex: 1,
@@ -376,11 +316,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.textSecondary,
   },
-  avatarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.primary,
-  },
 });
 
-export default AppointmentHistoryScreen;
+export default UpcomingAppointmentsScreen;
+

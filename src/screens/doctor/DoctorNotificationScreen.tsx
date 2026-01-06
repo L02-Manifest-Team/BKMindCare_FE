@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,22 +8,21 @@ import {
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
 import { useNotifications } from '../../context/NotificationContext';
 
-const StudentNotificationScreen = () => {
+const DoctorNotificationScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { notifications, loadNotifications, markAsRead, markAllAsRead } = useNotifications();
 
   const navItems = [
-    { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
-    { name: 'Chat', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles', route: 'ChatList' },
-    { name: 'Calendar', icon: 'calendar-outline', activeIcon: 'calendar', route: 'Calendar' },
-    { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'Profile' },
+    { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'DoctorDashboard' },
+    { name: 'Chat', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles', route: 'DoctorChatList' },
+    { name: 'Calendar', icon: 'calendar-outline', activeIcon: 'calendar', route: 'DoctorCalendar' },
+    { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'DoctorProfile' },
   ];
 
   useFocusEffect(
@@ -78,11 +77,11 @@ const StudentNotificationScreen = () => {
     
     // Navigate based on notification type
     if (notification.type === 'appointment' && notification.appointmentId) {
-      (navigation as any).navigate('AppointmentDetail', { 
+      (navigation as any).navigate('DoctorAppointmentDetail', { 
         appointmentId: notification.appointmentId 
       });
     } else if (notification.type === 'message' && notification.chatId) {
-      (navigation as any).navigate('Chat', { 
+      (navigation as any).navigate('DoctorChat', { 
         chatId: notification.chatId 
       });
     }
@@ -98,13 +97,11 @@ const StudentNotificationScreen = () => {
         <Text style={styles.headerTitle}>Thông báo</Text>
         {unreadCount > 0 && (
           <TouchableOpacity onPress={markAllAsRead} style={styles.markAllReadButton}>
-            <Text style={styles.markAllReadText}>Đánh dấu đã đọc tất cả</Text>
+            <Text style={styles.markAllReadText}>Đánh dấu đã đọc</Text>
           </TouchableOpacity>
         )}
-        {unreadCount === 0 && <View style={styles.headerPlaceholder} />}
       </View>
 
-      {/* Notifications List */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -115,41 +112,42 @@ const StudentNotificationScreen = () => {
             <TouchableOpacity
               key={notification.id}
               style={[
-                styles.notificationCard,
-                !notification.read && styles.unreadCard,
+                styles.notificationItem,
+                !notification.read && styles.unreadNotification,
               ]}
-              activeOpacity={0.7}
               onPress={() => handleNotificationPress(notification)}
+              activeOpacity={0.7}
             >
-              <View style={styles.notificationContent}>
-                <View style={[styles.iconContainer, { backgroundColor: getIconColor(notification.type) + '20' }]}>
-                  <Ionicons
-                    name={getIcon(notification.type) as any}
-                    size={24}
-                    color={getIconColor(notification.type)}
-                  />
-                </View>
-                <View style={styles.notificationInfo}>
-                  <View style={styles.notificationHeader}>
-                    <Text style={styles.notificationTitle}>{notification.title}</Text>
-                    {!notification.read && <View style={styles.unreadDot} />}
-                  </View>
-                  <Text style={styles.notificationMessage}>{notification.message}</Text>
-                  <Text style={styles.notificationTime}>{formatTime(notification.timestamp)}</Text>
-                </View>
+              <View style={[styles.iconContainer, { backgroundColor: getIconColor(notification.type) + '20' }]}>
+                <Ionicons
+                  name={getIcon(notification.type) as any}
+                  size={24}
+                  color={getIconColor(notification.type)}
+                />
               </View>
+              <View style={styles.notificationContent}>
+                <Text style={styles.notificationTitle}>{notification.title}</Text>
+                <Text style={styles.notificationMessage} numberOfLines={2}>
+                  {notification.message}
+                </Text>
+                <Text style={styles.notificationTime}>{formatTime(notification.timestamp)}</Text>
+              </View>
+              {!notification.read && <View style={styles.unreadDot} />}
             </TouchableOpacity>
           ))
         ) : (
-          <View style={styles.emptyState}>
+          <View style={styles.emptyContainer}>
             <Ionicons name="notifications-outline" size={64} color={Colors.textSecondary} />
-            <Text style={styles.emptyStateText}>Chưa có thông báo</Text>
+            <Text style={styles.emptyText}>Chưa có thông báo</Text>
+            <Text style={styles.emptySubtext}>
+              Các thông báo mới sẽ hiển thị ở đây
+            </Text>
           </View>
         )}
       </ScrollView>
 
       {/* Bottom Navigation */}
-      <BottomNavigationBar items={navItems} />
+      <BottomNavigationBar items={navItems} activeColor={Colors.success} />
     </View>
   );
 };
@@ -177,17 +175,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.text,
   },
-  headerPlaceholder: {
-    width: 40,
-  },
   markAllReadButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    padding: 8,
   },
   markAllReadText: {
     fontSize: 14,
     color: Colors.primary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -195,19 +189,16 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 100,
   },
-  notificationCard: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 12,
-  },
-  unreadCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
-  },
-  notificationContent: {
+  notificationItem: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  unreadNotification: {
+    backgroundColor: Colors.primaryLight + '10',
   },
   iconContainer: {
     width: 48,
@@ -217,47 +208,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  notificationInfo: {
+  notificationContent: {
     flex: 1,
-  },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
   },
   notificationTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.text,
-    flex: 1,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.primary,
+    marginBottom: 4,
   },
   notificationMessage: {
     fontSize: 14,
     color: Colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: 8,
     lineHeight: 20,
   },
   notificationTime: {
     fontSize: 12,
     color: Colors.textSecondary,
   },
-  emptyState: {
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+    marginLeft: 8,
+    marginTop: 4,
+  },
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 64,
+    paddingHorizontal: 32,
   },
-  emptyStateText: {
-    fontSize: 16,
-    color: Colors.textSecondary,
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text,
     marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
   },
 });
 
-export default StudentNotificationScreen;
+export default DoctorNotificationScreen;
 

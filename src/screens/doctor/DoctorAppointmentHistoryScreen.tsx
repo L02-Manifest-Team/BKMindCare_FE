@@ -1,31 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
-
-interface Appointment {
-  id: string;
-  patient: string;
-  date: string;
-  time: string;
-  type: 'in-person' | 'video-call';
-  status: 'confirmed' | 'completed' | 'cancelled';
-  duration: string;
-}
+import { appointmentService, AppointmentWithRelations } from '../../services/appointmentService';
 
 const DoctorAppointmentHistoryScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'confirmed' | 'completed' | 'cancelled'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'>('all');
+  const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const navItems = [
     { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'DoctorDashboard' },
@@ -34,72 +30,68 @@ const DoctorAppointmentHistoryScreen = () => {
     { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'DoctorProfile' },
   ];
 
-  // Mock appointments
-  const appointments: Appointment[] = [
-    {
-      id: '1',
-      patient: 'Truc Quynh',
-      date: '2024-10-15',
-      time: '09:00',
-      type: 'in-person',
-      status: 'completed',
-      duration: '60 minutes',
-    },
-    {
-      id: '2',
-      patient: 'Thuy Vi',
-      date: '2024-10-12',
-      time: '14:00',
-      type: 'in-person',
-      status: 'completed',
-      duration: '45 minutes',
-    },
-    {
-      id: '3',
-      patient: 'Minh Anh',
-      date: '2024-10-20',
-      time: '10:00',
-      type: 'video-call',
-      status: 'confirmed',
-      duration: '60 minutes',
-    },
-    {
-      id: '4',
-      patient: 'Hoang Nam',
-      date: '2024-10-08',
-      time: '16:00',
-      type: 'in-person',
-      status: 'cancelled',
-      duration: '30 minutes',
-    },
-    {
-      id: '5',
-      patient: 'Lan Phuong',
-      date: '2024-10-05',
-      time: '11:00',
-      type: 'video-call',
-      status: 'completed',
-      duration: '45 minutes',
-    },
-  ];
+  // Load appointments
+  const loadAppointments = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params: any = {
+        limit: 100,
+      };
+      
+      if (selectedFilter !== 'all') {
+        params.status = selectedFilter;
+      }
+      
+      const response = await appointmentService.getAppointments(params);
+      
+      // Sort by date descending
+      const sortedAppointments = response.data.sort((a, b) => {
+        const dateA = new Date(a.appointment_date + 'T' + a.time_slot);
+        const dateB = new Date(b.appointment_date + 'T' + b.time_slot);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      setAppointments(sortedAppointments);
+    } catch (error) {
+      console.error('Error loading appointments:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [selectedFilter]);
 
-  const filteredAppointments = appointments.filter((apt) => {
-    if (selectedFilter === 'all') return true;
-    return apt.status === selectedFilter;
-  });
+  useFocusEffect(
+    useCallback(() => {
+      loadAppointments();
+    }, [loadAppointments])
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadAppointments();
+  }, [loadAppointments]);
+
+  const filteredAppointments = appointments;
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric' });
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    return `${day} tháng ${month}, ${year}`;
+  };
+
+  const formatTime = (timeSlot: string) => {
+    return timeSlot;
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'confirmed':
+      case 'CONFIRMED':
         return Colors.warning;
-      case 'completed':
+      case 'COMPLETED':
         return Colors.success;
-      case 'cancelled':
+      case 'CANCELLED':
         return Colors.error;
       default:
         return Colors.textSecondary;
@@ -108,15 +100,25 @@ const DoctorAppointmentHistoryScreen = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'confirmed':
+      case 'CONFIRMED':
         return 'Đã xác nhận';
-      case 'completed':
+      case 'COMPLETED':
         return 'Hoàn thành';
-      case 'cancelled':
+      case 'CANCELLED':
         return 'Đã hủy';
+      case 'PENDING':
+        return 'Đang chờ';
       default:
         return status;
     }
+  };
+
+  const getAppointmentType = (notes: string | null) => {
+    if (!notes) return 'video-call';
+    if (notes.includes('Cơ sở 1') || notes.includes('Cơ sở 2')) {
+      return 'in-person';
+    }
+    return 'video-call';
   };
 
   return (
@@ -126,7 +128,7 @@ const DoctorAppointmentHistoryScreen = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Appointment History</Text>
+        <Text style={styles.headerTitle}>Lịch sử cuộc hẹn</Text>
         <View style={styles.headerPlaceholder} />
       </View>
 
@@ -134,6 +136,9 @@ const DoctorAppointmentHistoryScreen = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {/* Filter Buttons */}
         <View style={styles.filterSection}>
@@ -142,53 +147,68 @@ const DoctorAppointmentHistoryScreen = () => {
             onPress={() => setSelectedFilter('all')}
           >
             <Text style={[styles.filterText, selectedFilter === 'all' && styles.filterTextActive]}>
-              All
+              Tất cả
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, selectedFilter === 'confirmed' && styles.filterButtonActive]}
-            onPress={() => setSelectedFilter('confirmed')}
+            style={[styles.filterButton, selectedFilter === 'CONFIRMED' && styles.filterButtonActive]}
+            onPress={() => setSelectedFilter('CONFIRMED')}
           >
-            <Text style={[styles.filterText, selectedFilter === 'confirmed' && styles.filterTextActive]}>
-              Confirmed
+            <Text style={[styles.filterText, selectedFilter === 'CONFIRMED' && styles.filterTextActive]}>
+              Đã xác nhận
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, selectedFilter === 'completed' && styles.filterButtonActive]}
-            onPress={() => setSelectedFilter('completed')}
+            style={[styles.filterButton, selectedFilter === 'COMPLETED' && styles.filterButtonActive]}
+            onPress={() => setSelectedFilter('COMPLETED')}
           >
-            <Text style={[styles.filterText, selectedFilter === 'completed' && styles.filterTextActive]}>
-              Completed
+            <Text style={[styles.filterText, selectedFilter === 'COMPLETED' && styles.filterTextActive]}>
+              Hoàn thành
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, selectedFilter === 'cancelled' && styles.filterButtonActive]}
-            onPress={() => setSelectedFilter('cancelled')}
+            style={[styles.filterButton, selectedFilter === 'CANCELLED' && styles.filterButtonActive]}
+            onPress={() => setSelectedFilter('CANCELLED')}
           >
-            <Text style={[styles.filterText, selectedFilter === 'cancelled' && styles.filterTextActive]}>
-              Cancelled
+            <Text style={[styles.filterText, selectedFilter === 'CANCELLED' && styles.filterTextActive]}>
+              Đã hủy
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Appointments List */}
         <View style={styles.appointmentsSection}>
-          {filteredAppointments.length > 0 ? (
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+          ) : filteredAppointments.length > 0 ? (
             filteredAppointments.map((appointment) => (
               <TouchableOpacity
                 key={appointment.id}
                 style={styles.appointmentCard}
                 onPress={() => {
-                  // Navigate to appointment detail if needed
+                  (navigation as any).navigate('DoctorAppointmentDetail', {
+                    appointmentId: appointment.id,
+                  });
                 }}
                 activeOpacity={0.7}
               >
                 <View style={styles.appointmentHeader}>
                   <View style={styles.patientAvatar}>
-                    <Ionicons name="person" size={24} color={Colors.primary} />
+                    {appointment.patient?.avatar ? (
+                      <Image 
+                        source={{ uri: appointment.patient.avatar }} 
+                        style={styles.avatarImage} 
+                      />
+                    ) : (
+                      <Ionicons name="person" size={24} color={Colors.primary} />
+                    )}
                   </View>
                   <View style={styles.appointmentInfo}>
-                    <Text style={styles.patientName}>{appointment.patient}</Text>
+                    <Text style={styles.patientName}>
+                      {appointment.patient?.full_name || 'Bệnh nhân'}
+                    </Text>
                     <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appointment.status) + '20' }]}>
                       <View style={[styles.statusDot, { backgroundColor: getStatusColor(appointment.status) }]} />
                       <Text style={[styles.statusText, { color: getStatusColor(appointment.status) }]}>
@@ -200,25 +220,21 @@ const DoctorAppointmentHistoryScreen = () => {
                 <View style={styles.appointmentDetails}>
                   <View style={styles.detailItem}>
                     <Ionicons name="calendar-outline" size={16} color={Colors.textSecondary} />
-                    <Text style={styles.detailText}>{formatDate(appointment.date)}</Text>
+                    <Text style={styles.detailText}>{formatDate(appointment.appointment_date)}</Text>
                   </View>
                   <View style={styles.detailItem}>
                     <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
-                    <Text style={styles.detailText}>{appointment.time}</Text>
+                    <Text style={styles.detailText}>{formatTime(appointment.time_slot)}</Text>
                   </View>
                   <View style={styles.detailItem}>
                     <Ionicons
-                      name={appointment.type === 'video-call' ? 'videocam-outline' : 'location-outline'}
+                      name={getAppointmentType(appointment.notes) === 'video-call' ? 'videocam-outline' : 'location-outline'}
                       size={16}
                       color={Colors.textSecondary}
                     />
                     <Text style={styles.detailText}>
-                      {appointment.type === 'video-call' ? 'Video call' : 'In-person'}
+                      {getAppointmentType(appointment.notes) === 'video-call' ? 'Video call' : 'Trực tiếp'}
                     </Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Ionicons name="hourglass-outline" size={16} color={Colors.textSecondary} />
-                    <Text style={styles.detailText}>{appointment.duration}</Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -226,7 +242,7 @@ const DoctorAppointmentHistoryScreen = () => {
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="calendar-outline" size={64} color={Colors.textSecondary} />
-              <Text style={styles.emptyStateText}>No appointments found</Text>
+              <Text style={styles.emptyStateText}>Không tìm thấy cuộc hẹn</Text>
             </View>
           )}
         </View>
@@ -273,6 +289,7 @@ const styles = StyleSheet.create({
   filterSection: {
     flexDirection: 'row',
     paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 16,
     gap: 8,
   },
@@ -299,6 +316,10 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 0,
   },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
   appointmentCard: {
     backgroundColor: Colors.backgroundLight,
     borderRadius: 12,
@@ -317,6 +338,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   appointmentInfo: {
     flex: 1,
@@ -376,4 +402,3 @@ const styles = StyleSheet.create({
 });
 
 export default DoctorAppointmentHistoryScreen;
-

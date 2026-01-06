@@ -24,7 +24,7 @@ const FAQScreen = () => {
     {
       id: '1',
       question: 'How do I book an appointment?',
-      answer: 'You can book an appointment by going to the Appointments section, selecting a doctor, and choosing an available time slot. You can book either in-person or video call appointments.',
+      answer: 'You can book an appointment by going to the Appointments section, selecting a doctor, and choosing an available time slot. You can choose between in-person or anonymous chat appointments.',
     },
     {
       id: '2',

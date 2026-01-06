@@ -15,8 +15,19 @@ const firebaseConfig = {
 };
 
 
+<<<<<<< HEAD
 // Khởi tạo Firebase
 const app = initializeApp(firebaseConfig);
+=======
+// Initialize mock data on first import
+// Note: Commented out since we're using real backend now
+// try {
+//   addMockData();
+// } catch (error) {
+//   // Silently fail if there's an error initializing mock data
+//   console.log('Mock data initialization skipped');
+// }
+>>>>>>> eb3396b99c771e54cb544820438813dedf71b291
 
 // Khởi tạo Auth
 const auth = getAuth(app);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,24 +8,17 @@ import {
   TextInput,
   Dimensions,
   Image,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
+import { appointmentService, AppointmentWithRelations } from '../../services/appointmentService';
 
 const { width } = Dimensions.get('window');
-
-interface Appointment {
-  id: string;
-  time: string;
-  patient: string;
-  type: 'offline' | 'online';
-  duration: string;
-  tags?: string[];
-  date: Date;
-}
 
 const DoctorCalendarScreen = () => {
   const navigation = useNavigation();
@@ -33,6 +26,10 @@ const DoctorCalendarScreen = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
+  const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState<AppointmentWithRelations[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const navItems = [
     { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'DoctorDashboard' },
@@ -41,45 +38,48 @@ const DoctorCalendarScreen = () => {
     { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'DoctorProfile' },
   ];
 
-  // Mock appointments with dates and tags
-  const allAppointments: Appointment[] = [
-    { 
-      id: '1', 
-      time: '09:00', 
-      patient: 'Truc Quynh', 
-      type: 'offline', 
-      duration: '30 minutes',
-      tags: ['Anxiety'],
-      date: new Date(),
-    },
-    { 
-      id: '2', 
-      time: '14:00', 
-      patient: 'Thuy Vi', 
-      type: 'offline', 
-      duration: '30 minutes',
-      tags: ['Pressure'],
-      date: new Date(),
-    },
-    { 
-      id: '3', 
-      time: '16:00', 
-      patient: 'Truc Quynh', 
-      type: 'online', 
-      duration: '45 minutes',
-      tags: ['Stress', 'Relationship Issues Chat'],
-      date: new Date(),
-    },
-    {
-      id: '4',
-      time: '10:00',
-      patient: 'Anonymous',
-      type: 'online',
-      duration: '30 minutes',
-      tags: ['Stress', 'Relationship Issues Chat'],
-      date: new Date(Date.now() + 86400000), // Tomorrow
-    },
-  ];
+  // Load appointments
+  const loadAppointments = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await appointmentService.getAppointments({ limit: 200 });
+      const allAppointments = response.data || [];
+      setAppointments(allAppointments);
+
+      // Filter upcoming appointments
+      const now = new Date();
+      const upcoming = allAppointments.filter((apt) => {
+        const appointmentDate = new Date(`${apt.appointment_date}T${apt.time_slot}`);
+        return appointmentDate >= now && 
+               (apt.status === 'PENDING' || apt.status === 'CONFIRMED');
+      });
+
+      // Sort by date (earliest first)
+      upcoming.sort((a, b) => {
+        const dateA = new Date(`${a.appointment_date}T${a.time_slot}`);
+        const dateB = new Date(`${b.appointment_date}T${b.time_slot}`);
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      setUpcomingAppointments(upcoming.slice(0, 5)); // Show only first 5
+    } catch (error: any) {
+      console.error('Error loading appointments:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAppointments();
+    }, [loadAppointments])
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadAppointments();
+  }, [loadAppointments]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -101,8 +101,8 @@ const DoctorCalendarScreen = () => {
 
   const formatMonthYear = (date: Date) => {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
     ];
     return `${months[date.getMonth()]} ${date.getFullYear()}`;
   };
@@ -122,21 +122,13 @@ const DoctorCalendarScreen = () => {
   };
 
   const hasAppointment = (date: Date) => {
-    return allAppointments.some((apt) => {
-      const aptDate = apt.date;
-      return aptDate.getDate() === date.getDate() &&
-             aptDate.getMonth() === date.getMonth() &&
-             aptDate.getFullYear() === date.getFullYear();
-    });
+    const dateStr = date.toISOString().split('T')[0];
+    return appointments.some((apt) => apt.appointment_date === dateStr);
   };
 
   const getAppointmentsForDate = (date: Date) => {
-    return allAppointments.filter((apt) => {
-      const aptDate = apt.date;
-      return aptDate.getDate() === date.getDate() &&
-             aptDate.getMonth() === aptDate.getMonth() &&
-             aptDate.getFullYear() === aptDate.getFullYear();
-    });
+    const dateStr = date.toISOString().split('T')[0];
+    return appointments.filter((apt) => apt.appointment_date === dateStr);
   };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -151,10 +143,12 @@ const DoctorCalendarScreen = () => {
 
   const calendarDays = getDaysInMonth(currentMonth);
   const selectedAppointments = getAppointmentsForDate(selectedDate);
-  const filteredAppointments = selectedAppointments.filter((apt) =>
-    apt.patient.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    apt.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredAppointments = selectedAppointments.filter((apt) => {
+    const patientName = apt.patient?.full_name || '';
+    const reason = apt.reason || '';
+    return patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           reason.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   const getTagColor = (tag: string) => {
     const tagColors: { [key: string]: string } = {
@@ -169,6 +163,17 @@ const DoctorCalendarScreen = () => {
   const getCardBackgroundColor = (index: number) => {
     const colors = [Colors.blueLight, Colors.purpleLight, Colors.greenLight];
     return colors[index % colors.length];
+  };
+
+  const getAppointmentType = (notes: string | null) => {
+    if (!notes) return 'anonymous-chat';
+    if (notes.includes('Cơ sở 1') || notes.includes('Cơ sở 2')) {
+      return 'in-person';
+    }
+    if (notes.toLowerCase().includes('anonymous chat')) {
+      return 'anonymous-chat';
+    }
+    return 'anonymous-chat';
   };
 
   return (
@@ -197,7 +202,7 @@ const DoctorCalendarScreen = () => {
           <Ionicons name="search" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search appointments..."
+            placeholder="Tìm kiếm cuộc hẹn..."
             placeholderTextColor={Colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -214,7 +219,59 @@ const DoctorCalendarScreen = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
+        {/* Upcoming Appointments Section */}
+        {upcomingAppointments.length > 0 && (
+          <View style={styles.upcomingSection}>
+            <View style={styles.upcomingHeader}>
+              <Text style={styles.upcomingTitle}>Lịch sắp tới</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  // Navigate to all upcoming appointments if needed
+                }}
+              >
+                <Text style={styles.viewAllText}>Xem tất cả →</Text>
+              </TouchableOpacity>
+            </View>
+            {upcomingAppointments.map((appointment, index) => {
+              const appointmentType = getAppointmentType(appointment.notes);
+              return (
+                <TouchableOpacity
+                  key={appointment.id}
+                  style={styles.upcomingCard}
+                  onPress={() => (navigation as any).navigate('DoctorAppointmentDetail', {
+                    appointmentId: appointment.id,
+                  })}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.upcomingContent}>
+                    <View style={styles.upcomingDateContainer}>
+                      <Text style={styles.upcomingDay}>
+                        {new Date(appointment.appointment_date).getDate()}
+                      </Text>
+                      <Text style={styles.upcomingMonth}>
+                        {new Date(appointment.appointment_date).toLocaleDateString('vi-VN', { month: 'short' })}
+                      </Text>
+                    </View>
+                    <View style={styles.upcomingInfo}>
+                      <Text style={styles.upcomingPatient}>
+                        {appointment.patient?.full_name || 'Bệnh nhân'}
+                      </Text>
+                      <Text style={styles.upcomingTime}>
+                        {appointment.time_slot} • {appointmentType === 'in-person' ? 'Trực tiếp' : 'Chat ẩn danh'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
         {/* Calendar Navigation */}
         <View style={styles.calendarSection}>
           <View style={styles.calendarHeader}>
@@ -229,7 +286,7 @@ const DoctorCalendarScreen = () => {
 
           {/* Week Days */}
           <View style={styles.weekDays}>
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+            {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map((day) => (
               <Text key={day} style={styles.weekDay}>
                 {day}
               </Text>
@@ -277,74 +334,74 @@ const DoctorCalendarScreen = () => {
         {/* Selected Date Appointments */}
         <View style={styles.appointmentsSection}>
           <Text style={styles.sectionTitle}>
-            {selectedDate.toLocaleDateString('en-US', { 
+            {selectedDate.toLocaleDateString('vi-VN', { 
               weekday: 'long', 
               month: 'long', 
               day: 'numeric' 
             })}
           </Text>
           
-          {filteredAppointments.length > 0 ? (
-            filteredAppointments.map((appointment, index) => (
-              <TouchableOpacity
-                key={appointment.id}
-                style={[
-                  styles.appointmentCard,
-                  { backgroundColor: getCardBackgroundColor(index) }
-                ]}
-                onPress={() => navigation.navigate('DoctorAppointmentDetail' as never, {
-                  appointmentId: appointment.id,
-                  patientName: appointment.patient,
-                  date: appointment.date.toISOString().split('T')[0],
-                  time: appointment.time,
-                  type: appointment.type,
-                  location: appointment.type === 'offline' ? 'BK.B6' : undefined,
-                  duration: appointment.duration,
-                  tags: appointment.tags,
-                } as any)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.appointmentContent}>
-                  <View style={styles.patientAvatar}>
-                    {appointment.patient === 'Anonymous' ? (
-                      <Ionicons name="person" size={24} color={Colors.textSecondary} />
-                    ) : (
-                      <Ionicons name="person" size={24} color={Colors.primary} />
-                    )}
-                  </View>
-                  <View style={styles.appointmentInfo}>
-                    <View style={styles.appointmentHeader}>
-                      <Text style={styles.appointmentPatient}>
-                        {appointment.patient === 'Anonymous' ? 'anonymous' : appointment.patient}
-                      </Text>
-                      <Text style={styles.appointmentTime}>{appointment.time}</Text>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+          ) : filteredAppointments.length > 0 ? (
+            filteredAppointments.map((appointment, index) => {
+              const appointmentType = getAppointmentType(appointment.notes);
+              return (
+                <TouchableOpacity
+                  key={appointment.id}
+                  style={[
+                    styles.appointmentCard,
+                    { backgroundColor: getCardBackgroundColor(index) }
+                  ]}
+                  onPress={() => (navigation as any).navigate('DoctorAppointmentDetail', {
+                    appointmentId: appointment.id,
+                  })}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.appointmentContent}>
+                    <View style={styles.patientAvatar}>
+                      {appointment.patient?.avatar ? (
+                        <Image 
+                          source={{ uri: appointment.patient.avatar }} 
+                          style={styles.avatarImage} 
+                        />
+                      ) : (
+                        <Ionicons name="person" size={24} color={Colors.primary} />
+                      )}
                     </View>
-                    {appointment.patient !== 'Anonymous' && (
-                      <Text style={styles.studentLabel}>student</Text>
-                    )}
-                    <View style={styles.tagsContainer}>
-                      {appointment.tags?.map((tag, tagIndex) => (
-                        <View
-                          key={tagIndex}
-                          style={[styles.tag, { backgroundColor: getTagColor(tag) }]}
-                        >
-                          <Text style={styles.tagText}>{tag}</Text>
+                    <View style={styles.appointmentInfo}>
+                      <View style={styles.appointmentHeader}>
+                        <Text style={styles.appointmentPatient}>
+                          {appointment.patient?.full_name || 'Bệnh nhân'}
+                        </Text>
+                        <Text style={styles.appointmentTime}>{appointment.time_slot}</Text>
+                      </View>
+                      <Text style={styles.studentLabel}>Sinh viên</Text>
+                      {appointment.reason && (
+                        <View style={styles.tagsContainer}>
+                          <View
+                            style={[styles.tag, { backgroundColor: Colors.primary }]}
+                          >
+                            <Text style={styles.tagText}>{appointment.reason}</Text>
+                          </View>
                         </View>
-                      ))}
+                      )}
                     </View>
                   </View>
-                </View>
-                <TouchableOpacity style={styles.arrowButton}>
-                  <Ionicons name="chevron-forward" size={20} color={Colors.text} />
+                  <TouchableOpacity style={styles.arrowButton}>
+                    <Ionicons name="chevron-forward" size={20} color={Colors.text} />
+                  </TouchableOpacity>
                 </TouchableOpacity>
-              </TouchableOpacity>
-            ))
+              );
+            })
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="calendar-outline" size={64} color={Colors.textSecondary} />
-              <Text style={styles.emptyStateText}>No appointments scheduled</Text>
+              <Text style={styles.emptyStateText}>Không có cuộc hẹn nào</Text>
               <Text style={styles.emptyStateSubtext}>
-                Tap on a date with an appointment to view details
+                Chọn ngày khác để xem các cuộc hẹn
               </Text>
             </View>
           )}
@@ -506,6 +563,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
     marginBottom: 16,
+    textTransform: 'capitalize',
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
   },
   appointmentCard: {
     flexDirection: 'row',
@@ -528,6 +590,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   appointmentInfo: {
     flex: 1,
@@ -593,6 +660,64 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 8,
     textAlign: 'center',
+  },
+  upcomingSection: {
+    padding: 16,
+    paddingBottom: 8,
+  },
+  upcomingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  upcomingTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  upcomingCard: {
+    backgroundColor: Colors.backgroundLight,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  upcomingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  upcomingDateContainer: {
+    width: 50,
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  upcomingDay: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
+  upcomingMonth: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    textTransform: 'capitalize',
+  },
+  upcomingInfo: {
+    flex: 1,
+  },
+  upcomingPatient: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  upcomingTime: {
+    fontSize: 14,
+    color: Colors.textSecondary,
   },
 });
 

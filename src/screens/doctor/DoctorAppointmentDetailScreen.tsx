@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { CustomButton } from '../../components/CustomButton';
 import { AppointmentPopup } from '../../components/AppointmentPopup';
-import { AppointmentType } from '../../types';
+import { appointmentService, AppointmentWithRelations } from '../../services/appointmentService';
 
 const DoctorAppointmentDetailScreen = () => {
   const navigation = useNavigation();
@@ -22,27 +23,53 @@ const DoctorAppointmentDetailScreen = () => {
   const routeParams = route.params as any;
   
   const appointmentId = routeParams?.appointmentId;
-  const patientName = routeParams?.patientName || 'Truc Quynh';
-  const appointmentDate = routeParams?.date || '2024-10-17';
-  const appointmentTime = routeParams?.time || '16:00';
-  const appointmentType = (routeParams?.type || 'in-person') as AppointmentType;
-  const location = routeParams?.location || 'BK.B6';
-  const duration = routeParams?.duration || '60 minutes';
-  const tags = routeParams?.tags || ['Anxiety'];
-
-  const [status, setStatus] = useState<'pending' | 'confirmed' | 'rejected'>('pending');
+  const [appointment, setAppointment] = useState<AppointmentWithRelations | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const [showConfirmSuccessPopup, setShowConfirmSuccessPopup] = useState(false);
   const [showRejectConfirmPopup, setShowRejectConfirmPopup] = useState(false);
   const [showRejectSuccessPopup, setShowRejectSuccessPopup] = useState(false);
 
-  const handleConfirm = () => {
-    setShowConfirmSuccessPopup(true);
+  // Load appointment detail
+  const loadAppointmentDetail = useCallback(async () => {
+    if (!appointmentId) return;
+    
+    try {
+      setLoading(true);
+      const detail = await appointmentService.getAppointmentDetail(appointmentId);
+      setAppointment(detail);
+    } catch (error) {
+      console.error('Error loading appointment detail:', error);
+      Alert.alert('Lỗi', 'Không thể tải thông tin cuộc hẹn');
+    } finally {
+      setLoading(false);
+    }
+  }, [appointmentId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAppointmentDetail();
+    }, [loadAppointmentDetail])
+  );
+
+  const handleConfirm = async () => {
+    if (!appointmentId) return;
+    
+    try {
+      setUpdating(true);
+      await appointmentService.approveAppointment(appointmentId);
+      setShowConfirmSuccessPopup(true);
+    } catch (error) {
+      console.error('Error confirming appointment:', error);
+      Alert.alert('Lỗi', 'Không thể xác nhận cuộc hẹn');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const handleConfirmSuccessClose = () => {
     setShowConfirmSuccessPopup(false);
-    setStatus('confirmed');
-    // TODO: Update appointment status in database
+    loadAppointmentDetail();
     setTimeout(() => {
       navigation.goBack();
     }, 300);
@@ -52,51 +79,107 @@ const DoctorAppointmentDetailScreen = () => {
     setShowRejectConfirmPopup(true);
   };
 
-  const handleRejectConfirm = () => {
-    setShowRejectConfirmPopup(false);
-    setShowRejectSuccessPopup(true);
+  const handleRejectConfirm = async () => {
+    if (!appointmentId) return;
+    
+    try {
+      setUpdating(true);
+      setShowRejectConfirmPopup(false);
+      await appointmentService.rejectAppointment(appointmentId);
+      setShowRejectSuccessPopup(true);
+    } catch (error) {
+      console.error('Error rejecting appointment:', error);
+      Alert.alert('Lỗi', 'Không thể từ chối cuộc hẹn');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const handleRejectSuccessClose = () => {
     setShowRejectSuccessPopup(false);
-    setStatus('rejected');
-    // TODO: Update appointment status in database
+    loadAppointmentDetail();
     setTimeout(() => {
       navigation.goBack();
     }, 300);
   };
 
-  const getStatusColor = () => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'confirmed':
+      case 'CONFIRMED':
         return Colors.success;
-      case 'rejected':
+      case 'CANCELLED':
         return Colors.error;
       default:
         return Colors.warning;
     }
   };
 
-  const getStatusText = () => {
+  const getStatusText = (status: string) => {
     switch (status) {
-      case 'confirmed':
+      case 'CONFIRMED':
         return 'Đã xác nhận';
-      case 'rejected':
-        return 'Đã từ chối';
+      case 'CANCELLED':
+        return 'Đã hủy';
+      case 'COMPLETED':
+        return 'Hoàn thành';
       default:
         return 'Đang chờ';
     }
   };
 
-  const getTagColor = (tag: string) => {
-    const tagColors: { [key: string]: string } = {
-      'Anxiety': Colors.blue,
-      'Pressure': Colors.purple,
-      'Stress': Colors.success,
-      'Relationship Issues Chat': Colors.pink,
-    };
-    return tagColors[tag] || Colors.primary;
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
   };
+
+  const formatTime = (timeSlot: string) => {
+    return timeSlot;
+  };
+
+  const getAppointmentType = (notes: string | null) => {
+    if (!notes) return 'anonymous-chat';
+    if (notes.includes('Cơ sở 1') || notes.includes('Cơ sở 2')) {
+      return 'in-person';
+    }
+    if (notes.toLowerCase().includes('anonymous chat')) {
+      return 'anonymous-chat';
+    }
+    return 'anonymous-chat';
+  };
+
+  const getAppointmentLocation = (notes: string | null) => {
+    if (!notes) return undefined;
+    if (notes.includes('Cơ sở 1')) {
+      return 'Cơ sở 1 (268 Lý Thường Kiệt)';
+    }
+    if (notes.includes('Cơ sở 2')) {
+      return 'Cơ sở 2 (Dĩ An)';
+    }
+    return undefined;
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Đang tải...</Text>
+      </View>
+    );
+  }
+
+  if (!appointment) {
+    return (
+      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
+        <Text style={styles.loadingText}>Không tìm thấy cuộc hẹn</Text>
+      </View>
+    );
+  }
+
+  const appointmentType = getAppointmentType(appointment.notes);
+  const location = getAppointmentLocation(appointment.notes);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -116,10 +199,10 @@ const DoctorAppointmentDetailScreen = () => {
       >
         {/* Status Badge */}
         <View style={styles.statusSection}>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor() + '20' }]}>
-            <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
-            <Text style={[styles.statusText, { color: getStatusColor() }]}>
-              {getStatusText()}
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(appointment.status) + '20' }]}>
+            <View style={[styles.statusDot, { backgroundColor: getStatusColor(appointment.status) }]} />
+            <Text style={[styles.statusText, { color: getStatusColor(appointment.status) }]}>
+              {getStatusText(appointment.status)}
             </Text>
           </View>
         </View>
@@ -127,25 +210,29 @@ const DoctorAppointmentDetailScreen = () => {
         {/* Patient Info */}
         <View style={styles.patientSection}>
           <View style={styles.patientAvatar}>
-            <Ionicons name="person" size={40} color={Colors.primary} />
+            {appointment.patient?.avatar ? (
+              <Image 
+                source={{ uri: appointment.patient.avatar }} 
+                style={styles.avatarImage} 
+              />
+            ) : (
+              <Ionicons name="person" size={40} color={Colors.primary} />
+            )}
           </View>
-          <Text style={styles.patientName}>{patientName}</Text>
-          <Text style={styles.patientLabel}>student</Text>
-          {tags.length > 0 && (
+          <Text style={styles.patientName}>
+            {appointment.patient?.full_name || 'Bệnh nhân'}
+          </Text>
+          <Text style={styles.patientLabel}>Sinh viên</Text>
+          {appointment.reason && (
             <View style={styles.tagsContainer}>
-              {tags.map((tag: string, index: number) => (
-                <View
-                  key={index}
-                  style={[styles.tag, { backgroundColor: getTagColor(tag) }]}
-                >
-                  <Text style={styles.tagText}>{tag}</Text>
-                </View>
-              ))}
+              <View style={[styles.tag, { backgroundColor: Colors.primary }]}>
+                <Text style={styles.tagText}>{appointment.reason}</Text>
+              </View>
             </View>
           )}
         </View>
 
-        {/* Appointment Details - Read Only */}
+        {/* Appointment Details */}
         <View style={styles.detailsSection}>
           <Text style={styles.sectionTitle}>Thông tin cuộc hẹn</Text>
 
@@ -156,7 +243,7 @@ const DoctorAppointmentDetailScreen = () => {
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Ngày</Text>
-              <Text style={styles.detailValue}>{appointmentDate}</Text>
+              <Text style={styles.detailValue}>{formatDate(appointment.appointment_date)}</Text>
             </View>
           </View>
 
@@ -167,18 +254,7 @@ const DoctorAppointmentDetailScreen = () => {
             </View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Giờ</Text>
-              <Text style={styles.detailValue}>{appointmentTime}</Text>
-            </View>
-          </View>
-
-          {/* Duration */}
-          <View style={styles.detailItem}>
-            <View style={styles.detailIcon}>
-              <Ionicons name="hourglass-outline" size={20} color={Colors.primary} />
-            </View>
-            <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Thời lượng</Text>
-              <Text style={styles.detailValue}>{duration}</Text>
+              <Text style={styles.detailValue}>{formatTime(appointment.time_slot)}</Text>
             </View>
           </View>
 
@@ -186,7 +262,7 @@ const DoctorAppointmentDetailScreen = () => {
           <View style={styles.detailItem}>
             <View style={styles.detailIcon}>
               <Ionicons
-                name={appointmentType === 'video-call' ? 'videocam-outline' : 'location-outline'}
+                name={appointmentType === 'anonymous-chat' ? 'chatbubbles-outline' : 'location-outline'}
                 size={20}
                 color={Colors.primary}
               />
@@ -194,7 +270,7 @@ const DoctorAppointmentDetailScreen = () => {
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Loại cuộc hẹn</Text>
               <Text style={styles.detailValue}>
-                {appointmentType === 'video-call' ? 'Video call' : 'Trực tiếp'}
+                {appointmentType === 'anonymous-chat' ? 'Chat ẩn danh' : 'Trực tiếp'}
               </Text>
             </View>
           </View>
@@ -211,27 +287,52 @@ const DoctorAppointmentDetailScreen = () => {
               </View>
             </View>
           )}
-        </View>
 
-        {/* Note */}
+          {/* Notes */}
+          {appointment.notes && (
+            <View style={styles.detailItem}>
+              <View style={styles.detailIcon}>
+                <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
+              </View>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Ghi chú</Text>
+                <Text style={styles.detailValue}>{appointment.notes}</Text>
+              </View>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* Action Buttons */}
-      {status === 'pending' && (
+      {appointment.status === 'PENDING' && (
         <View style={[styles.actionsSection, { paddingBottom: insets.bottom + 16 }]}>
           <TouchableOpacity
             style={[styles.actionButton, styles.rejectButton]}
             onPress={handleReject}
+            disabled={updating}
           >
-            <Ionicons name="close-circle" size={20} color={Colors.error} />
-            <Text style={styles.rejectButtonText}>Từ chối</Text>
+            {updating ? (
+              <ActivityIndicator size="small" color={Colors.error} />
+            ) : (
+              <>
+                <Ionicons name="close-circle" size={20} color={Colors.error} />
+                <Text style={styles.rejectButtonText}>Từ chối</Text>
+              </>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, styles.confirmButton]}
             onPress={handleConfirm}
+            disabled={updating}
           >
-            <Ionicons name="checkmark-circle" size={20} color={Colors.background} />
-            <Text style={styles.confirmButtonText}>Xác nhận</Text>
+            {updating ? (
+              <ActivityIndicator size="small" color={Colors.background} />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color={Colors.background} />
+                <Text style={styles.confirmButtonText}>Xác nhận</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -261,6 +362,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: Colors.textSecondary,
   },
   header: {
     flexDirection: 'row',
@@ -326,6 +436,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   patientName: {
     fontSize: 20,
@@ -393,16 +508,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
   },
-  noteSection: {
-    padding: 16,
-    paddingTop: 0,
-  },
-  noteText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-    fontStyle: 'italic',
-  },
   actionsSection: {
     position: 'absolute',
     bottom: 0,
@@ -445,4 +550,3 @@ const styles = StyleSheet.create({
 });
 
 export default DoctorAppointmentDetailScreen;
-

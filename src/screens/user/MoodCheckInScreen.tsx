@@ -1,21 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, ScrollView } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { CustomButton } from '../../components/CustomButton';
 import { MoodType } from '../../types';
-import { db } from '../../config/firebase';
+import { moodService, MoodEntry } from '../../services/moodService';
 import { LinearGradient } from 'expo-linear-gradient';
 
 
 const moods: { type: MoodType; label: string; image: any }[] = [
-  { type: 'sad', label: 'Sad', image: require('../../../assets/Sad.png') },
-  { type: 'nervous', label: 'Nervous', image: require('../../../assets/Nervous.png') },
-  { type: 'awkward', label: 'Awkward', image: require('../../../assets/Awkward.png') },
-  { type: 'shy', label: 'Shy', image: require('../../../assets/Shy.png') },
-  { type: 'happy', label: 'Happy', image: require('../../../assets/Happy.png') },
-  { type: 'wonderful', label: 'Wonderful', image: require('../../../assets/Wonderful.png') },
+  { type: 'SAD', label: 'Buồn', image: require('../../../assets/Sad.png') },
+  { type: 'ANXIOUS', label: 'Lo lắng', image: require('../../../assets/Nervous.png') },
+  { type: 'STRESSED', label: 'Căng thẳng', image: require('../../../assets/Awkward.png') },
+  { type: 'TIRED', label: 'Mệt mỏi', image: require('../../../assets/Shy.png') },
+  { type: 'HAPPY', label: 'Vui vẻ', image: require('../../../assets/Happy.png') },
+  { type: 'EXCITED', label: 'Hào hứng', image: require('../../../assets/Wonderful.png') },
+  { type: 'CALM', label: 'Bình tĩnh', image: require('../../../assets/Happy.png') },
+  { type: 'ANGRY', label: 'Tức giận', image: require('../../../assets/Sad.png') },
 ];
 
 const MoodCheckInScreen = () => {
@@ -25,6 +27,31 @@ const MoodCheckInScreen = () => {
     (route.params as any)?.mood
   );
   const [loading, setLoading] = useState(false);
+  const [todayMood, setTodayMood] = useState<MoodEntry | null>(null);
+  const [hasCheckedIn, setHasCheckedIn] = useState(false);
+
+  // Load today's mood when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      loadTodayMood();
+    }, [])
+  );
+
+  const loadTodayMood = async () => {
+    try {
+      const checkedIn = await moodService.hasTodayCheckIn();
+      setHasCheckedIn(checkedIn);
+      if (checkedIn) {
+        const mood = await moodService.getTodayMood();
+        setTodayMood(mood);
+        if (mood) {
+          setSelectedMood(mood.mood as MoodType);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading today mood:', error);
+    }
+  };
 
   const handleSaveMood = async () => {
     if (!selectedMood) {
@@ -34,18 +61,24 @@ const MoodCheckInScreen = () => {
 
     setLoading(true);
     try {
-      // Save mood check-in to Firestore
-      const moodCheckIn = {
-        userId: 'user1', // TODO: Get from auth context
+      // Save mood check-in via API
+      await moodService.createMoodEntry({
         mood: selectedMood,
-        date: new Date().toISOString().split('T')[0],
-        timestamp: Date.now(),
-      };
+        notes: null,
+      });
 
-      await db.collection('moodCheckIns').add(moodCheckIn);
+      // Reload today's mood to reflect the change
+      await loadTodayMood();
 
-      // Navigate to mood result screen
-      navigation.navigate('MoodResult' as never, { mood: selectedMood });
+      Alert.alert('Thành công', hasCheckedIn ? 'Đã cập nhật cảm xúc của bạn!' : 'Đã lưu cảm xúc của bạn!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Navigate to dashboard instead of goBack to avoid GO_BACK error
+            navigation.navigate('UserDashboard' as never);
+          },
+        },
+      ]);
     } catch (error) {
       console.error('Error saving mood:', error);
       Alert.alert('Lỗi', 'Không thể lưu cảm xúc. Vui lòng thử lại.');
@@ -56,28 +89,28 @@ const MoodCheckInScreen = () => {
 
   return (
     <LinearGradient
-  colors={[
-    '#A8E6FF',
-    '#C8F0E8',
-    '#E8F8F0',
-    '#FFE8F5',
-    '#FFD4F0'
-  ]}
-  start={{ x: 0, y: 0 }}
-  end={{ x: 1, y: 1 }}
-  style={styles.container}
->
+      colors={[
+        '#A8E6FF',
+        '#C8F0E8',
+        '#E8F8F0',
+        '#FFE8F5',
+        '#FFD4F0'
+      ]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
 
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mood Check-in</Text>
+        <Text style={styles.headerTitle}>Ghi nhận cảm xúc</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -86,17 +119,39 @@ const MoodCheckInScreen = () => {
         <View style={styles.greetingContainer}>
           <View style={styles.greetingBadge}>
             <Ionicons name="cloud-outline" size={16} color={Colors.primary} />
-            <Text style={styles.greetingText}>Good Evening</Text>
+            <Text style={styles.greetingText}>Chào buổi tối</Text>
           </View>
         </View>
 
         {/* Main Prompt */}
         <View style={styles.promptContainer}>
-          <Text style={styles.title}>How are you feeling today?</Text>
+          <Text style={styles.title}>
+            {hasCheckedIn ? 'Cảm xúc hôm nay của bạn' : 'Hôm nay bạn cảm thấy thế nào?'}
+          </Text>
           <Text style={styles.subtitle}>
-            Take a moment to reflect your emotions and assess your mood today
+            {hasCheckedIn 
+              ? 'Bạn có thể cập nhật cảm xúc của mình bất cứ lúc nào'
+              : 'Hãy dành một chút thời gian để suy ngẫm về cảm xúc của bạn'}
           </Text>
         </View>
+
+        {/* Today's Mood Display */}
+        {hasCheckedIn && todayMood && (
+          <View style={styles.todayMoodContainer}>
+            <View style={styles.todayMoodBadge}>
+              <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+              <Text style={styles.todayMoodText}>
+                Đã ghi nhận: {moods.find(m => m.type === todayMood.mood)?.label}
+              </Text>
+              <Text style={styles.todayMoodTime}>
+                {new Date(todayMood.created_at).toLocaleTimeString('vi-VN', { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Mood Grid */}
         <View style={styles.moodGrid}>
@@ -110,8 +165,8 @@ const MoodCheckInScreen = () => {
               onPress={() => setSelectedMood(mood.type)}
               activeOpacity={0.7}
             >
-              <Image 
-                source={mood.image} 
+              <Image
+                source={mood.image}
                 style={styles.moodImage}
                 resizeMode="contain"
               />
@@ -124,26 +179,35 @@ const MoodCheckInScreen = () => {
           <View style={styles.selectedMoodInfo}>
             <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
             <Text style={styles.selectedMoodText}>
-              You selected: {moods.find(m => m.type === selectedMood)?.label}
+              Bạn đã chọn: {moods.find(m => m.type === selectedMood)?.label}
             </Text>
           </View>
         )}
 
         <View style={styles.tipsContainer}>
-          <Text style={styles.tipsTitle}>💡 Tip:</Text>
+          <Text style={styles.tipsTitle}>💡 Mẹo:</Text>
           <Text style={styles.tipsText}>
-            Daily mood check-ins help you track your mental health and receive timely support from professionals.
+            Ghi nhận cảm xúc hàng ngày giúp bạn theo dõi sức khỏe tinh thần và nhận được hỗ trợ kịp thời từ chuyên gia.
           </Text>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
         <CustomButton
-          title="Save Mood"
+          title={hasCheckedIn ? "Cập nhật cảm xúc" : "Lưu cảm xúc"}
           onPress={handleSaveMood}
           disabled={!selectedMood}
           loading={loading}
         />
+        {hasCheckedIn && (
+          <TouchableOpacity
+            style={styles.viewHistoryButton}
+            onPress={() => navigation.navigate('MoodHistory' as never)}
+          >
+            <Ionicons name="time-outline" size={18} color={Colors.primary} />
+            <Text style={styles.viewHistoryText}>Xem lịch sử cảm xúc</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </LinearGradient>
   );
@@ -279,6 +343,42 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     backgroundColor: Colors.background,
+  },
+  todayMoodContainer: {
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  todayMoodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.successLight,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  todayMoodText: {
+    fontSize: 14,
+    color: Colors.success,
+    fontWeight: '600',
+  },
+  todayMoodTime: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginLeft: 4,
+  },
+  viewHistoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  viewHistoryText: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '500',
   },
 });
 

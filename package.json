@@ -23,6 +23,10 @@
     "@react-navigation/stack": "^6.3.20",
     "expo": "^54.0.25",
     "expo-linear-gradient": "~15.0.7",
+<<<<<<< HEAD
+=======
+    "expo-notifications": "^0.32.15",
+>>>>>>> eb3396b99c771e54cb544820438813dedf71b291
     "expo-status-bar": "~3.0.8",
     "firebase": "^12.6.0",
     "react": "19.1.0",

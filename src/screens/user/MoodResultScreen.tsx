@@ -32,6 +32,15 @@ const MoodResultScreen = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('current');
   const [showPeriodModal, setShowPeriodModal] = useState(false);
 
+  // Auto-navigate to UserDashboard after 3 seconds
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      navigation.navigate('UserDashboard' as never);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [navigation]);
+
   // Current mood data (5 days) - matching the image
   const currentMoodData: MoodData[] = [
     { day: 'Day 1', mood: 1 }, // neutral

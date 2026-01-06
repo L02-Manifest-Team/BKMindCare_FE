@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,15 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Doctor } from '../../types';
-import { mockDoctors } from '../../constants/data';
+import { doctorService, DoctorProfile } from '../../services/doctorService';
+import { chatService } from '../../services/chatService';
 
 const { width } = Dimensions.get('window');
 
@@ -33,14 +35,57 @@ const DoctorDetailScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const doctorId = (route.params as any)?.doctorId as string;
+  const doctorId = (route.params as any)?.doctorId;
   
-  const doctor = mockDoctors.find((d) => d.id === doctorId) || mockDoctors[0];
-  const [activeTab, setActiveTab] = useState<TabType>('book');
+  const [doctor, setDoctor] = useState<DoctorProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabType>('about');
   const [isFavorite, setIsFavorite] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [appointmentType, setAppointmentType] = useState<'in-person' | 'video-call'>('in-person');
+  const [appointmentType, setAppointmentType] = useState<'in-person' | 'anonymous-chat'>('in-person');
+
+  // Fetch doctor data
+  const loadDoctor = useCallback(async () => {
+    if (!doctorId) return;
+    try {
+      setLoading(true);
+      const data = await doctorService.getDoctorById(doctorId);
+      setDoctor({
+        ...data,
+        specialization: data.doctor_profile?.specialization || data.specialization,
+        bio: data.doctor_profile?.bio || data.bio,
+        rating: data.doctor_profile?.rating || data.rating || 0,
+      });
+    } catch (error) {
+      Alert.alert('Lỗi', 'Không thể tải thông tin bác sĩ');
+      navigation.goBack();
+    } finally {
+      setLoading(false);
+    }
+  }, [doctorId, navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDoctor();
+    }, [loadDoctor])
+  );
+
+  const handleStartChat = async () => {
+    if (!doctor) return;
+    try {
+      const chat = await chatService.createChat(doctor.id);
+      (navigation as any).navigate('Chat', {
+        chatId: chat.id,
+        targetId: doctor.id,
+        targetName: doctor.full_name,
+        targetAvatar: doctor.avatar || undefined,
+        targetRole: 'DOCTOR',
+      });
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Không thể tạo chat');
+    }
+  };
 
   // Mock reviews data
   const reviews: Review[] = [
@@ -70,17 +115,8 @@ const DoctorDetailScreen = () => {
     },
   ];
 
-  // Mock about text
-  const aboutText = `Hi I'm Dr ${doctor.name.split(' ').slice(-1)[0]}!
-I've been working with university
-students for over 8 years, and
-It's truly my passion, I know firsthand
-how overwhelming college
-life can be-balancing academics,
-relationships, future planning
-and self-discovery all at once.
-Let's work together to help you feel
-better. You deserve support.`;
+  // Mock about text - will use doctor.bio if available
+  const aboutText = doctor?.bio || `Hi I'm a mental health professional!`;
 
   // Generate calendar dates for current month
   const getCalendarDates = () => {
@@ -108,14 +144,15 @@ better. You deserve support.`;
   const timeSlots = ['10:00', '11:00', '12:00', '13:00', '15:00', '16:00', '17:00', '18:00'];
 
   const handleBookAppointment = () => {
-    if (selectedDate && selectedTime) {
-      navigation.navigate('Appointment' as never, {
-        doctorId: doctor.id,
-        date: selectedDate,
-        time: selectedTime,
-        type: appointmentType,
-      } as never);
-    }
+    if (!doctor || !selectedDate || !selectedTime) return;
+    
+    const formattedDate = selectedDate.toISOString().split('T')[0];
+    (navigation as any).navigate('Appointment', {
+      doctorId: doctor.id,
+      date: formattedDate,
+      time: selectedTime,
+      type: appointmentType,
+    });
   };
 
   const formatMonthYear = (date: Date) => {
@@ -169,17 +206,28 @@ better. You deserve support.`;
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {loading ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={{ marginTop: 16, color: Colors.textSecondary }}>Đang tải...</Text>
+          </View>
+        ) : !doctor ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <Text style={{ color: Colors.textSecondary }}>Không tìm thấy thông tin</Text>
+          </View>
+        ) : (
+          <>
         {/* Doctor Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.profileInfo}>
-            <Text style={styles.doctorName}>{doctor.name}</Text>
-            <Text style={styles.specialization}>{doctor.specialization}</Text>
+            <Text style={styles.doctorName}>{doctor.full_name}</Text>
+            <Text style={styles.specialization}>{doctor.specialization || 'Chuyên gia tâm lý'}</Text>
             <View style={styles.ratingBar}>
               <View style={styles.ratingContainer}>
                 <Ionicons name="star" size={16} color={Colors.warning} />
-                <Text style={styles.rating}>{doctor.rating}</Text>
+                <Text style={styles.rating}>{doctor.rating?.toFixed(1) || '0.0'}</Text>
               </View>
-              <Text style={styles.doctorId}>ID: {doctor.id.padStart(7, '0')}</Text>
+              <Text style={styles.doctorId}>ID: {String(doctor.id).padStart(7, '0')}</Text>
             </View>
           </View>
           <View style={styles.avatarContainer}>
@@ -310,7 +358,7 @@ better. You deserve support.`;
 
               {/* Type of Appointment */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Type of appointment</Text>
+                <Text style={styles.sectionTitle}>Loại cuộc hẹn</Text>
                 <View style={styles.typeContainer}>
                   <TouchableOpacity
                     style={styles.typeOption}
@@ -319,16 +367,16 @@ better. You deserve support.`;
                     <View style={styles.radioButton}>
                       {appointmentType === 'in-person' && <View style={styles.radioSelected} />}
                     </View>
-                    <Text style={styles.typeText}>In-person</Text>
+                    <Text style={styles.typeText}>Trực tiếp</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.typeOption}
-                    onPress={() => setAppointmentType('video-call')}
+                    onPress={() => setAppointmentType('anonymous-chat')}
                   >
                     <View style={styles.radioButton}>
-                      {appointmentType === 'video-call' && <View style={styles.radioSelected} />}
+                      {appointmentType === 'anonymous-chat' && <View style={styles.radioSelected} />}
                     </View>
-                    <Text style={styles.typeText}>Video call</Text>
+                    <Text style={styles.typeText}>Chat ẩn danh</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -390,21 +438,33 @@ better. You deserve support.`;
             </View>
           )}
         </View>
+          </>
+        )}
       </ScrollView>
 
-      {/* Book Appointment Button */}
-      {activeTab === 'book' && (
+      {/* Action Buttons */}
+      {!loading && doctor && (
         <View style={[styles.bookButtonContainer, { paddingBottom: insets.bottom + 16 }]}>
-          <TouchableOpacity
-            style={[
-              styles.bookButton,
-              (!selectedDate || !selectedTime) && styles.bookButtonDisabled,
-            ]}
-            onPress={handleBookAppointment}
-            disabled={!selectedDate || !selectedTime}
-          >
-            <Text style={styles.bookButtonText}>Book appointment</Text>
-          </TouchableOpacity>
+          {activeTab === 'book' ? (
+            <TouchableOpacity
+              style={[
+                styles.bookButton,
+                (!selectedDate || !selectedTime) && styles.bookButtonDisabled,
+              ]}
+              onPress={handleBookAppointment}
+              disabled={!selectedDate || !selectedTime}
+            >
+              <Text style={styles.bookButtonText}>Đặt lịch hẹn</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.bookButton}
+              onPress={handleStartChat}
+            >
+              <Ionicons name="chatbubbles" size={20} color={Colors.background} style={{ marginRight: 8 }} />
+              <Text style={styles.bookButtonText}>Nhắn tin với bác sĩ</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -751,6 +811,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   bookButtonDisabled: {
     backgroundColor: Colors.border,

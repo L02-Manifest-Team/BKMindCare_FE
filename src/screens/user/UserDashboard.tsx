@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
+=======
+import React, { useState, useCallback, useEffect } from 'react';
+>>>>>>> eb3396b99c771e54cb544820438813dedf71b291
 import {
   View,
   Text,
@@ -6,18 +10,26 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
-import { mockDoctors, mockAppointments } from '../../constants/data';
+import { moodService, MoodType, MoodEntry } from '../../services/moodService';
+import { authService } from '../../services/authService';
 import BottomNavigationBar from '../../components/BottomNavigationBar';
 import testFirebaseConnection from '../../config/testFirebase';
 
 const UserDashboard = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { unreadCount } = useNotifications();
+  const [streakData, setStreakData] = useState<StreakData | null>(null);
+  const [todayMood, setTodayMood] = useState<MoodEntry | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState('Bạn');
 
   const [connectionStatus, setConnectionStatus] = useState('Đang kiểm tra...');
   const [isConnected, setIsConnected] = useState(false);
@@ -35,11 +47,22 @@ const UserDashboard = () => {
   const upcomingAppointment = mockAppointments[0];
 
   const navItems = [
-    { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
+    { name: 'Trang chủ', icon: 'home-outline', activeIcon: 'home', route: 'UserDashboard' },
     { name: 'Chat', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles', route: 'ChatList' },
-    { name: 'Calendar', icon: 'calendar-outline', activeIcon: 'calendar', route: 'Calendar' },
-    { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: 'Profile' },
+    { name: 'Lịch hẹn', icon: 'calendar-outline', activeIcon: 'calendar', route: 'Calendar' },
+    { name: 'Cá nhân', icon: 'person-outline', activeIcon: 'person', route: 'Profile' },
   ];
+
+  const currentMoodInfo = todayMood ? moodInfo[todayMood.mood as MoodType] : null;
+  const isNegativeMood = currentMoodInfo?.isNegative || false;
+  const currentMoodImage = todayMood ? moodImages[todayMood.mood as MoodType] : null;
+
+  // Get gradient colors based on mood
+  const getStreakGradient = (): readonly [string, string, string] => {
+    if (!todayMood) return ['#26A69A', '#4DB6AC', '#80CBC4'] as const;
+    if (isNegativeMood) return ['#7986CB', '#5C6BC0', '#9FA8DA'] as const;
+    return ['#26A69A', '#4DB6AC', '#80CBC4'] as const;
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -55,14 +78,28 @@ const UserDashboard = () => {
               />
             </View>
             <View style={styles.welcomeSection}>
+<<<<<<< HEAD
               {/* <Text style={[styles.welcomeText, { color: isConnected ? Colors.text : Colors.error }]}>
                 {connectionStatus}
               </Text> */}
               <Text>Welcome back Candy</Text>
+=======
+              <Text style={styles.welcomeText}>Xin chào, {userName}!</Text>
+>>>>>>> eb3396b99c771e54cb544820438813dedf71b291
             </View>
             <View style={styles.headerRight}>
-              <TouchableOpacity onPress={() => navigation.navigate('StudentNotification' as never)}>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('StudentNotification' as never)}
+                style={styles.notificationButton}
+              >
                 <Ionicons name="notifications" size={28} color={Colors.text} />
+                {unreadCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => navigation.navigate('Profile' as never)}
@@ -74,139 +111,224 @@ const UserDashboard = () => {
           </View>
         </View>
 
-        {/* Question Section */}
-        <View style={styles.questionSection}>
-          <Text style={styles.questionText}>How's your mental state at the moment?</Text>
-        </View>
-
-        {/* Mood Check-in Button */}
-        <View style={styles.moodSection}>
-          <TouchableOpacity
-            style={styles.moodCheckInButton}
-            onPress={() => navigation.navigate('MoodCheckIn' as never)}
-            activeOpacity={0.7}
+        {/* Combined Streak + Mood Card */}
+        <View style={styles.streakSection}>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate((todayMood ? 'MoodHistory' : 'MoodCheckIn') as never)}
+            activeOpacity={0.9}
           >
-            <Ionicons name="heart" size={24} color={Colors.primary} />
-            <Text style={styles.moodCheckInText}>Mood Check-in</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Anonymous Chat Button */}
-        <View style={styles.moodSection}>
-          <TouchableOpacity
-            style={styles.anonymousChatButton}
-            onPress={() => (navigation as any).navigate('ChatList')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.anonymousChatIcon}>
-              <Ionicons name="lock-closed" size={24} color={Colors.primary} />
-            </View>
-            <View style={styles.anonymousChatInfo}>
-              <Text style={styles.anonymousChatTitle}>Chat ẩn danh</Text>
-              <Text style={styles.anonymousChatSubtitle}>Trò chuyện với chuyên gia một cách ẩn danh</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Upcoming Appointments */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Upcoming appointments</Text>
-          {upcomingAppointment && (
-            <TouchableOpacity
-              style={styles.appointmentCard}
-              onPress={() => (navigation as any).navigate('AppointmentDetail', { appointmentId: upcomingAppointment.id })}
+            <LinearGradient
+              colors={getStreakGradient()}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.streakCard}
             >
-              <View style={styles.appointmentContent}>
-                <View style={styles.appointmentLeft}>
-                  <Text style={styles.appointmentDoctor}>{upcomingAppointment.doctorName}</Text>
-                  <Text style={styles.appointmentDate}>19/11/2025</Text>
-                  <Text style={styles.appointmentDetail}>Session detail chat</Text>
-                  <Text style={styles.appointmentDuration}>Duration: 60mins</Text>
-                  <View style={styles.appointmentTime}>
-                    <Text style={styles.appointmentTimeText}>{upcomingAppointment.time}</Text>
-                    <View style={styles.greenDot} />
+              {loading ? (
+                <ActivityIndicator color="#fff" size="large" />
+              ) : (
+                <>
+                  {/* Streak Section - Full Width */}
+                  <View style={styles.streakFullSection}>
+                    <View style={styles.streakInfoFull}>
+                      <View style={styles.streakCountContainer}>
+                        <Ionicons name="flame" size={28} color="#fff" />
+                        <Text style={styles.streakCount}>
+                          {streakData?.streakCount || 0}
+                        </Text>
+                        <Text style={styles.streakLabelInline}>ngày liên tiếp</Text>
+                      </View>
+                    </View>
+                    
+                    {/* Today's Mood - Large Image */}
+                    <View style={styles.todayMoodImageContainer}>
+                      {todayMood && currentMoodImage ? (
+                        <>
+                          <View style={styles.moodImageWrapper}>
+                            <Image 
+                              source={currentMoodImage} 
+                              style={styles.moodImage}
+                              resizeMode="contain"
+                            />
+                          </View>
+                          <Text style={styles.moodImageLabel}>{currentMoodInfo?.label}</Text>
+                        </>
+                      ) : (
+                        <>
+                          <View style={styles.moodImageWrapper}>
+                            <Text style={styles.moodEmoji}>🤔</Text>
+                          </View>
+                          <Text style={styles.moodImageLabel}>Chưa ghi nhận</Text>
+                        </>
+                      )}
+                    </View>
                   </View>
-                </View>
-                <View style={styles.appointmentIcon}>
-                  <Image 
-                    source={require('../../../assets/carddetails(1).png')} 
-                    style={styles.appointmentImage}
-                    resizeMode="contain"
-                  />
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
+                  
+                  {/* Weekly Check-in Status with Mood Emoji - Full Width */}
+                  <View style={styles.weeklyContainerFull}>
+                    {streakData?.weeklyStatus.map((day, index) => {
+                      const dayMoodInfo = day.mood ? moodInfo[day.mood] : null;
+                      return (
+                        <View key={index} style={styles.dayColumnFull}>
+                          <Text style={styles.dayLabel}>{day.day}</Text>
+                          <View style={[
+                            styles.dayCheckFull,
+                            day.checked ? styles.dayChecked : styles.dayUnchecked
+                          ]}>
+                            {day.checked && dayMoodInfo ? (
+                              <Text style={{ fontSize: 16 }}>{dayMoodInfo.emoji}</Text>
+                            ) : day.checked ? (
+                              <Ionicons name="checkmark" size={16} color="#fff" />
+                            ) : null}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  
+                  {/* Encouraging Message */}
+                  <Text style={styles.streakHint}>
+                    {todayMood 
+                      ? (isNegativeMood ? '💜 Bạn không đơn độc, hãy chia sẻ nhé!' : '✨ Tuyệt vời! Tiếp tục giữ năng lượng này!')
+                      : '👆 Nhấn để ghi nhận cảm xúc hôm nay'}
+                  </Text>
+                  
+                  {/* View Today's Mood Button */}
+                  {todayMood && (
+                    <TouchableOpacity
+                      style={styles.viewMoodButton}
+                      onPress={() => navigation.navigate('MoodCheckIn' as never)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="eye-outline" size={16} color={Colors.primary} />
+                      <Text style={styles.viewMoodText}>Xem lại cảm xúc hôm nay</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
 
-        {/* Available Doctors */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Available</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('AllDoctors' as never)}>
-              <Text style={styles.seeAllText}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.doctorsGrid}>
-            {mockDoctors.slice(0, 4).map((doctor, index) => {
-              // Map doctors to card images
-              const cardImages = [
-                require('../../../assets/carddetails(1).png'),
-                require('../../../assets/carddetails(3).png'),
-                require('../../../assets/carddetails(4).png'),
-                require('../../../assets/carddetails(2).png'), // Fallback for 4th doctor
-              ];
-              
-              return (
-                <TouchableOpacity
-                  key={doctor.id}
-                  style={styles.doctorCard}
-                  onPress={() => (navigation as any).navigate('DoctorDetail', { doctorId: doctor.id })}
+        {/* Negative Mood Support Section */}
+        {!loading && isNegativeMood && (
+          <View style={styles.supportSection}>
+            <Text style={styles.supportTitle}>💛 Chúng mình ở đây vì bạn</Text>
+            <View style={styles.supportActions}>
+              <TouchableOpacity
+                style={styles.supportCard}
+                onPress={() => navigation.navigate('Journal' as never)}
+              >
+                <LinearGradient
+                  colors={['#FFF8E1', '#FFECB3']}
+                  style={styles.supportCardGradient}
                 >
-                  <Image 
-                    source={cardImages[index]} 
-                    style={styles.doctorCardImage}
-                    resizeMode="contain"
-                  />
-                  <View style={styles.ratingContainer}>
-                    <Ionicons name="star" size={12} color={Colors.warning} />
-                    <Text style={styles.rating}>{doctor.rating}</Text>
-                  </View>
-                  <Text style={styles.doctorName}>{doctor.name}</Text>
-                  <Text style={styles.doctorSpecialty}>{doctor.specialization}</Text>
-                  <TouchableOpacity style={styles.doctorButton}>
-                    <Ionicons name="chevron-up" size={16} color={Colors.teal} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              );
-            })}
+                  <Ionicons name="book" size={28} color="#FFA000" />
+                  <Text style={styles.supportCardTitle}>Nhật ký</Text>
+                  <Text style={styles.supportCardDesc}>Viết ra sẽ nhẹ lòng hơn</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.supportCard}
+                onPress={() => navigation.navigate('ChatList' as never)}
+              >
+                <LinearGradient
+                  colors={['#E8F5E9', '#C8E6C9']}
+                  style={styles.supportCardGradient}
+                >
+                  <Ionicons name="chatbubble-ellipses" size={28} color="#43A047" />
+                  <Text style={styles.supportCardTitle}>Tâm sự</Text>
+                  <Text style={styles.supportCardDesc}>Chat với chuyên gia</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.supportCard}
+                onPress={() => navigation.navigate('MentalHealthTest' as never)}
+              >
+                <LinearGradient
+                  colors={['#E3F2FD', '#BBDEFB']}
+                  style={styles.supportCardGradient}
+                >
+                  <Ionicons name="clipboard" size={28} color="#1976D2" />
+                  <Text style={styles.supportCardTitle}>Bài test</Text>
+                  <Text style={styles.supportCardDesc}>Hiểu bản thân hơn</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Truy cập nhanh</Text>
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => navigation.navigate('Journal' as never)}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#FFF3E0' }]}>
+                <Ionicons name="book" size={24} color="#FF9800" />
+              </View>
+              <Text style={styles.quickActionText}>Nhật ký</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => navigation.navigate('MoodHistory' as never)}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#E3F2FD' }]}>
+                <Ionicons name="bar-chart" size={24} color="#4A90E2" />
+              </View>
+              <Text style={styles.quickActionText}>Lịch sử cảm xúc</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => navigation.navigate('ChatList' as never)}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#E8F5E9' }]}>
+                <Ionicons name="chatbubbles" size={24} color="#4CAF50" />
+              </View>
+              <Text style={styles.quickActionText}>Chat tư vấn</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => navigation.navigate('Appointment' as never)}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#FCE4EC' }]}>
+                <Ionicons name="calendar" size={24} color="#E91E63" />
+              </View>
+              <Text style={styles.quickActionText}>Đặt lịch hẹn</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
         {/* Services */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Services</Text>
+          <Text style={styles.sectionTitle}>Dịch vụ</Text>
           {[
-            { name: 'Appointments', route: 'Appointment' },
-            { name: 'Mental Health Test', route: 'MentalHealthTest' },
-            { name: 'FAQ', route: 'FAQ' },
-            { name: 'Support chat', route: 'Chat' },
+            { name: 'Đặt lịch khám', route: 'Appointment', icon: 'calendar-outline' },
+            { name: 'Kiểm tra sức khỏe tâm thần', route: 'MentalHealthTest', icon: 'clipboard-outline' },
+            { name: 'Danh sách bác sĩ', route: 'AllDoctors', icon: 'people-outline' },
+            { name: 'Câu hỏi thường gặp', route: 'FAQ', icon: 'help-circle-outline' },
           ].map((service) => (
             <TouchableOpacity
               key={service.name}
               style={styles.serviceItem}
               onPress={() => navigation.navigate(service.route as never)}
             >
-              <Text style={styles.serviceText}>{service.name}</Text>
+              <View style={styles.serviceLeft}>
+                <Ionicons name={service.icon as any} size={22} color={Colors.primary} />
+                <Text style={styles.serviceText}>{service.name}</Text>
+              </View>
               <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
             </TouchableOpacity>
           ))}
         </View>
       </ScrollView>
 
-      {/* Bottom Navigation */}
       <BottomNavigationBar items={navItems} />
     </View>
   );
@@ -234,13 +356,35 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   logo: {
-    width: 72,
-    height: 72,
+    width: 60,
+    height: 60,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  notificationButton: {
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: Colors.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.background,
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   profileIcon: {
     width: 40,
@@ -254,210 +398,265 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   welcomeText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: Colors.text,
   },
-  questionSection: {
+  // Streak Card
+  streakSection: {
     paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  questionText: {
-    fontSize: 16,
-    color: Colors.textSecondary,
+  streakCard: {
+    borderRadius: 20,
+    padding: 20,
   },
-  moodSection: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
-  },
-  moodCheckInButton: {
+  cardTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primaryLight,
-    padding: 16,
-    borderRadius: 12,
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  moodCheckInText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
+  streakFullSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  streakInfoFull: {
     flex: 1,
-    marginLeft: 12,
+    alignItems: 'flex-start',
   },
-  anonymousChatButton: {
+  streakInfo: {
+    alignItems: 'flex-start',
+  },
+  streakCountContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primaryLight,
-    padding: 16,
-    borderRadius: 12,
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
-  anonymousChatIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.background,
+  streakCount: {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 6,
+  },
+  streakLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
+  },
+  streakLabelInline: {
+    fontSize: 20,
+    color: 'rgba(255,255,255,0.95)',
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+  todayMoodBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 16,
+    padding: 12,
+    alignItems: 'center',
+    minWidth: 90,
+  },
+  todayMoodImageContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.primary,
   },
-  anonymousChatInfo: {
+  moodImageWrapper: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 40,
+    padding: 6,
+  },
+  moodImage: {
+    width: 65,
+    height: 65,
+  },
+  moodImageLabel: {
+    fontSize: 13,
+    color: '#fff',
+    marginTop: 4,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  moodEmoji: {
+    fontSize: 45,
+  },
+  moodLabel: {
+    fontSize: 13,
+    color: '#fff',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  weeklyContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: 10,
+    marginBottom: 12,
+  },
+  weeklyContainerFull: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 12,
+    gap: 8,
+  },
+  dayColumn: {
+    alignItems: 'center',
+  },
+  dayColumnFull: {
     flex: 1,
-    marginLeft: 12,
+    alignItems: 'center',
   },
-  anonymousChatTitle: {
-    fontSize: 16,
+  dayLabel: {
+    fontSize: 13,
+    color: '#fff',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  dayCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayCheckFull: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayChecked: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  dayUnchecked: {
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  streakHint: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.95)',
+    textAlign: 'center',
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  viewMoodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginTop: 8,
+    gap: 6,
+  },
+  viewMoodText: {
+    fontSize: 13,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  // Support Section
+  supportSection: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  supportTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  supportActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  supportCard: {
+    width: '31%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  supportCardGradient: {
+    padding: 14,
+    alignItems: 'center',
+    minHeight: 110,
+  },
+  supportCardTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginTop: 8,
+  },
+  supportCardDesc: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  // Quick Actions
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  quickActionCard: {
+    width: '48%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickActionIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  quickActionText: {
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.text,
-    marginBottom: 4,
+    textAlign: 'center',
   },
-  anonymousChatSubtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
+  // Section
   section: {
     paddingHorizontal: 16,
     marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: Colors.text,
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  seeAllText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  appointmentCard: {
-    backgroundColor: Colors.lightGreen,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  appointmentContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  appointmentLeft: {
-    flex: 1,
-  },
-  appointmentDoctor: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  appointmentDate: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  appointmentDetail: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  appointmentDuration: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 8,
-  },
-  appointmentTime: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  appointmentTimeText: {
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: '500',
-    marginRight: 8,
-  },
-  greenDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.success,
-  },
-  appointmentIcon: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  appointmentImage: {
-    width: 80,
-    height: 80,
-  },
-  doctorsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  doctorCard: {
-    width: '48%',
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
-    alignItems: 'center',
-    position: 'relative',
-  },
-  doctorCardImage: {
-    width: '100%',
-    height: 120,
-    marginBottom: 8,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  rating: {
-    fontSize: 12,
-    color: Colors.text,
-    marginLeft: 4,
-    fontWeight: '600',
-  },
-  doctorName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  doctorSpecialty: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  doctorButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.tealLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'absolute',
-    top: 8,
-    right: 8,
-  },
+  // Service Items
   serviceItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+  },
+  serviceLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   serviceText: {
     fontSize: 16,
