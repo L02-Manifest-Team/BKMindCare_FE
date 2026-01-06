@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import SurveyReminderModal from './src/components/SurveyReminderModal';
+import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 
 // Screens
 import SplashScreen from './src/screens/SplashScreen';
@@ -60,86 +61,88 @@ export default function App() {
       <NotificationProvider>
         <SafeAreaProvider>
           <StatusBar style="dark" />
-          <NavigationContainer>
-          <SurveyReminderModal />
-          <Stack.Navigator
-            initialRouteName="Splash"
-            screenOptions={{
-              headerShown: false,
-              cardStyleInterpolator: ({ current, layouts }) => ({
-                cardStyle: {
-                  transform: [
-                    {
-                      translateX: current.progress.interpolate({
+          <ActionSheetProvider>
+            <NavigationContainer>
+              <SurveyReminderModal />
+              <Stack.Navigator
+                initialRouteName="Splash"
+                screenOptions={{
+                  headerShown: false,
+                  cardStyleInterpolator: ({ current, layouts }) => ({
+                    cardStyle: {
+                      transform: [
+                        {
+                          translateX: current.progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [layouts.screen.width, 0],
+                          }),
+                        },
+                      ],
+                      opacity: current.progress.interpolate({
                         inputRange: [0, 1],
-                        outputRange: [layouts.screen.width, 0],
+                        outputRange: [0.8, 1],
                       }),
                     },
-                  ],
-                  opacity: current.progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.8, 1],
                   }),
-                },
-              }),
-              transitionSpec: {
-                open: {
-                  animation: 'timing',
-                  config: { duration: 250 },
-                },
-                close: {
-                  animation: 'timing',
-                  config: { duration: 250 },
-                },
-              },
-            }}
-          >
-            <Stack.Screen name="Splash" component={SplashScreen} />
-            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-          <Stack.Screen name="UserDashboard" component={UserDashboard} />
-          <Stack.Screen name="MoodCheckIn" component={MoodCheckInScreen} />
-          <Stack.Screen name="ChatList" component={ChatListScreen} />
-          <Stack.Screen name="Chat" component={ChatScreen} />
-          <Stack.Screen name="Appointment" component={AppointmentScreen} />
-          <Stack.Screen name="AppointmentDetail" component={AppointmentDetailScreen} />
-          <Stack.Screen name="EditAppointment" component={EditAppointmentScreen} />
-          <Stack.Screen name="MentalHealthTest" component={MentalHealthTestScreen} />
-          <Stack.Screen name="FAQ" component={FAQScreen} />
-          <Stack.Screen name="AllDoctors" component={AllDoctorsScreen} />
-          <Stack.Screen name="Profile" component={ProfileScreen} />
-          <Stack.Screen name="AppointmentHistory" component={AppointmentHistoryScreen} />
-          <Stack.Screen name="UpcomingAppointments" component={UpcomingAppointmentsScreen} />
-          <Stack.Screen name="MoodHistory" component={MoodHistoryScreen} />
-          <Stack.Screen name="MoodResult" component={MoodResultScreen} />
-          <Stack.Screen name="DoctorDetail" component={DoctorDetailScreen} />
-          <Stack.Screen name="Calendar" component={CalendarScreen} />
-          <Stack.Screen name="DoctorDashboard" component={DoctorDashboard} />
-          <Stack.Screen name="ExpertDashboard" component={ExpertDashboard} />
-          <Stack.Screen name="DoctorChat" component={ChatScreen} />
-          <Stack.Screen name="DoctorChatList" component={ChatListScreen} />
-          <Stack.Screen name="DoctorCalendar" component={DoctorCalendarScreen} />
-          <Stack.Screen name="DoctorProfile" component={DoctorProfileScreen} />
-          <Stack.Screen name="DoctorAppointmentDetail" component={DoctorAppointmentDetailScreen} />
-          <Stack.Screen name="Rating" component={RatingScreen} />
-          <Stack.Screen name="PatientStats" component={PatientStatsScreen} />
-          <Stack.Screen name="DetailAppointment" component={DetailAppointmentScreen} />
-          <Stack.Screen name="Notification" component={NotificationScreen} />
-          <Stack.Screen name="StudentNotification" component={StudentNotificationScreen} />
-          <Stack.Screen name="About" component={AboutScreen} />
-          <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-          <Stack.Screen name="DoctorAbout" component={DoctorAboutScreen} />
-          <Stack.Screen name="DoctorEditProfile" component={DoctorEditProfileScreen} />
-          <Stack.Screen name="DoctorSettings" component={DoctorSettingsScreen} />
-          <Stack.Screen name="DoctorHelpSupport" component={DoctorHelpSupportScreen} />
-          <Stack.Screen name="DoctorAppointmentHistory" component={DoctorAppointmentHistoryScreen} />
-          <Stack.Screen name="DoctorAppointmentReview" component={DoctorAppointmentReviewScreen} />
-          <Stack.Screen name="DoctorNotification" component={DoctorNotificationScreen} />
-          <Stack.Screen name="Journal" component={JournalScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
+                  transitionSpec: {
+                    open: {
+                      animation: 'timing',
+                      config: { duration: 250 },
+                    },
+                    close: {
+                      animation: 'timing',
+                      config: { duration: 250 },
+                    },
+                  },
+                }}
+              >
+                <Stack.Screen name="Splash" component={SplashScreen} />
+                <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="Register" component={RegisterScreen} />
+              <Stack.Screen name="UserDashboard" component={UserDashboard} />
+              <Stack.Screen name="MoodCheckIn" component={MoodCheckInScreen} />
+              <Stack.Screen name="ChatList" component={ChatListScreen} />
+              <Stack.Screen name="Chat" component={ChatScreen} />
+              <Stack.Screen name="Appointment" component={AppointmentScreen} />
+              <Stack.Screen name="AppointmentDetail" component={AppointmentDetailScreen} />
+              <Stack.Screen name="EditAppointment" component={EditAppointmentScreen} />
+              <Stack.Screen name="MentalHealthTest" component={MentalHealthTestScreen} />
+              <Stack.Screen name="FAQ" component={FAQScreen} />
+              <Stack.Screen name="AllDoctors" component={AllDoctorsScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="AppointmentHistory" component={AppointmentHistoryScreen} />
+              <Stack.Screen name="UpcomingAppointments" component={UpcomingAppointmentsScreen} />
+              <Stack.Screen name="MoodHistory" component={MoodHistoryScreen} />
+              <Stack.Screen name="MoodResult" component={MoodResultScreen} />
+              <Stack.Screen name="DoctorDetail" component={DoctorDetailScreen} />
+              <Stack.Screen name="Calendar" component={CalendarScreen} />
+              <Stack.Screen name="DoctorDashboard" component={DoctorDashboard} />
+              <Stack.Screen name="ExpertDashboard" component={ExpertDashboard} />
+              <Stack.Screen name="DoctorChat" component={ChatScreen} />
+              <Stack.Screen name="DoctorChatList" component={ChatListScreen} />
+              <Stack.Screen name="DoctorCalendar" component={DoctorCalendarScreen} />
+              <Stack.Screen name="DoctorProfile" component={DoctorProfileScreen} />
+              <Stack.Screen name="DoctorAppointmentDetail" component={DoctorAppointmentDetailScreen} />
+              <Stack.Screen name="Rating" component={RatingScreen} />
+              <Stack.Screen name="PatientStats" component={PatientStatsScreen} />
+              <Stack.Screen name="DetailAppointment" component={DetailAppointmentScreen} />
+              <Stack.Screen name="Notification" component={NotificationScreen} />
+              <Stack.Screen name="StudentNotification" component={StudentNotificationScreen} />
+              <Stack.Screen name="About" component={AboutScreen} />
+              <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
+              <Stack.Screen name="DoctorAbout" component={DoctorAboutScreen} />
+              <Stack.Screen name="DoctorEditProfile" component={DoctorEditProfileScreen} />
+              <Stack.Screen name="DoctorSettings" component={DoctorSettingsScreen} />
+              <Stack.Screen name="DoctorHelpSupport" component={DoctorHelpSupportScreen} />
+              <Stack.Screen name="DoctorAppointmentHistory" component={DoctorAppointmentHistoryScreen} />
+              <Stack.Screen name="DoctorAppointmentReview" component={DoctorAppointmentReviewScreen} />
+              <Stack.Screen name="DoctorNotification" component={DoctorNotificationScreen} />
+              <Stack.Screen name="Journal" component={JournalScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+          </ActionSheetProvider>
         </SafeAreaProvider>
       </NotificationProvider>
     </AuthProvider>

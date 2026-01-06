@@ -16,7 +16,7 @@ const SURVEY_LAST_SHOWN_KEY = 'survey_last_shown_at';
 const REMINDER_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000;
 
 const SURVEY_URL =
-  'https://docs.google.com/forms/d/e/1FAIpQLSeLSGiHWHVWj9L7K_u-4j_aJEb4utrZMrvO9RokqXupaILU8g/viewform?usp=dialog';
+  'https://docs.google.com/forms/d/e/1FAIpQLSeLSGiHWHVWj9L7K_u-4j_aJEb4utrZMrvO9RokqXupaILU8g/viewform?usp=sharing&ouid=103487856263317226505';
 
 const SurveyReminderModal: React.FC = () => {
   const [visible, setVisible] = useState(false);
@@ -81,11 +81,11 @@ const SurveyReminderModal: React.FC = () => {
     >
       <View style={styles.backdrop}>
         <View style={styles.container}>
-          <Text style={styles.title}>Cảm ơn bạn đã trải nghiệm BKMindCare 💙</Text>
+          <Text style={styles.title}>Cảm ơn bạn đã trải nghiệm BKMindCare</Text>
           <Text style={styles.message}>
             Bạn có thể giúp tụi mình cải thiện ứng dụng tốt hơn cho sinh viên bằng
             một khảo sát nhỏ (khoảng 2–3 phút). Mọi phản hồi đều ẩn danh và rất
-            quý giá với tụi mình.
+            quý giá với tụi mình 💙
           </Text>
 
           <View style={styles.buttonsRow}>

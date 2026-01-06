@@ -12,6 +12,9 @@ import {
   Keyboard,
   StatusBar,
   Alert,
+  Modal,
+  Vibration,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -22,6 +25,7 @@ import { Colors } from '../constants/colors';
 import { chatService, Message } from '../services/chatService';
 import { useAuth } from '../context/AuthContext';
 import { websocketService } from '../services/websocketService';
+import * as Clipboard from 'expo-clipboard';
 
 const ChatScreen = () => {
   const navigation = useNavigation();
@@ -33,6 +37,16 @@ const ChatScreen = () => {
   const [loading, setLoading] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [inputText, setInputText] = useState('');
+  const [editingMessage, setEditingMessage] = useState<IMessage | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    message: IMessage | null;
+    x: number;
+    y: number;
+    isOwnMessage: boolean;
+  }>({ visible: false, message: null, x: 0, y: 0, isOwnMessage: false });
+  
+  const menuAnimation = useRef(new Animated.Value(0)).current;
   
   const inputRef = useRef<TextInput>(null);
   const chatIdRef = useRef<number | null>(null);
@@ -177,6 +191,114 @@ const ChatScreen = () => {
     }
   }, [chatId, user, targetName, targetAvatar, currentUserId]);
 
+  // Handle message long press
+  const handleMessageLongPress = useCallback((context: any, message: IMessage) => {
+    const isOwnMessage = message.user._id === currentUserId;
+    
+    // Trigger haptic feedback
+    Vibration.vibrate(50);
+    
+    // Show context menu at message position
+    setContextMenu({
+      visible: true,
+      message,
+      x: 0,
+      y: 0,
+      isOwnMessage
+    });
+    
+    // Animate menu appearance
+    Animated.spring(menuAnimation, {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 8,
+    }).start();
+  }, [currentUserId, menuAnimation]);
+  
+  const closeContextMenu = useCallback(() => {
+    Animated.timing(menuAnimation, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setContextMenu({ visible: false, message: null, x: 0, y: 0, isOwnMessage: false });
+    });
+  }, [menuAnimation]);
+  
+  const handleCopyMessage = useCallback(async () => {
+    if (contextMenu.message) {
+      await Clipboard.setStringAsync(contextMenu.message.text);
+      closeContextMenu();
+      Alert.alert('Đã sao chép', 'Tin nhắn đã được sao chép');
+    }
+  }, [contextMenu.message, closeContextMenu]);
+  
+  const handleEditMessage = useCallback(() => {
+    if (contextMenu.message) {
+      setEditingMessage(contextMenu.message);
+      setInputText(contextMenu.message.text);
+      closeContextMenu();
+      inputRef.current?.focus();
+    }
+  }, [contextMenu.message, closeContextMenu]);
+  
+  const handleDeleteMessage = useCallback(() => {
+    if (!contextMenu.message) return;
+    
+    const message = contextMenu.message;
+    closeContextMenu();
+    
+    Alert.alert(
+      'Xóa tin nhắn',
+      'Bạn có chắc muốn xóa tin nhắn này?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const chatIdNumber = typeof chatId === 'string' ? parseInt(chatId, 10) : chatId;
+              const messageIdNumber = typeof message._id === 'string' ? parseInt(message._id, 10) : message._id as number;
+              await chatService.deleteMessage(chatIdNumber, messageIdNumber);
+              
+              // Remove from local state
+              setMessages((prevMessages) => 
+                prevMessages.filter(m => m._id !== message._id)
+              );
+            } catch (error: any) {
+              Alert.alert('Lỗi', 'Không thể xóa tin nhắn');
+            }
+          },
+        },
+      ]
+    );
+  }, [contextMenu.message, chatId, closeContextMenu]);
+
+  // Handle WebSocket edit message
+  const handleWebSocketEdit = useCallback((message: Message) => {
+    console.log('[ChatScreen] Received WebSocket edit:', message.id);
+    
+    // Update message in local state
+    setMessages((previousMessages) =>
+      previousMessages.map(msg =>
+        msg._id === message.id.toString()
+          ? { ...msg, text: message.content }
+          : msg
+      )
+    );
+  }, []);
+
+  // Handle WebSocket delete message
+  const handleWebSocketDelete = useCallback((messageId: number) => {
+    console.log('[ChatScreen] Received WebSocket delete:', messageId);
+    
+    // Remove message from local state
+    setMessages((previousMessages) =>
+      previousMessages.filter(msg => msg._id !== messageId.toString())
+    );
+  }, []);
+
   // Handle WebSocket messages
   const handleWebSocketMessage = useCallback((message: Message) => {
     if (!user?.id || !chatIdRef.current) return;
@@ -254,7 +376,9 @@ const ChatScreen = () => {
         chatIdNumber,
         handleWebSocketMessage,
         (error) => console.error('[ChatScreen] OS WebSocket error:', error),
-        () => isConnectedRef.current = false
+        () => isConnectedRef.current = false,
+        handleWebSocketEdit, // Edit handler
+        handleWebSocketDelete // Delete handler
       );
       isConnectedRef.current = true;
       
@@ -312,8 +436,34 @@ const ChatScreen = () => {
   const handleCustomSend = async () => {
     if (!inputText.trim()) return;
     const text = inputText.trim();
-    setInputText('');
     
+    // Handle edit mode
+    if (editingMessage) {
+      try {
+        const chatIdNumber = typeof chatId === 'string' ? parseInt(chatId, 10) : chatId;
+        const messageIdNumber = typeof editingMessage._id === 'string' ? parseInt(editingMessage._id, 10) : editingMessage._id as number;
+        
+        await chatService.editMessage(chatIdNumber, messageIdNumber, text);
+        
+        // Update local state
+        setMessages((prevMessages) =>
+          prevMessages.map(m =>
+            m._id === editingMessage._id
+              ? { ...m, text }
+              : m
+          )
+        );
+        
+        setEditingMessage(null);
+        setInputText('');
+      } catch (error: any) {
+        Alert.alert('Lỗi', 'Không thể chỉnh sửa tin nhắn');
+      }
+      return;
+    }
+    
+    // Normal send
+    setInputText('');
     const message: IMessage = {
       _id: Date.now().toString(),
       text,
@@ -325,6 +475,11 @@ const ChatScreen = () => {
       },
     };
     await onSend([message]);
+  };
+  
+  const handleCancelEdit = () => {
+    setEditingMessage(null);
+    setInputText('');
   };
 
   const renderBubble = (props: any) => {
@@ -435,41 +590,120 @@ const ChatScreen = () => {
           renderBubble={renderBubble}
           showUserAvatar={false}
           showAvatarForEveryMessage={false}
+          onLongPress={handleMessageLongPress}
           renderInputToolbar={() => (
-            <View style={[
-              styles.customInputContainer,
-              {
-                marginBottom: Platform.OS === 'ios' ? 0 : 10, // Small adj for Android, iOS handles via safe area usually
-                paddingBottom: 6,
-                paddingTop: 6,
-              }
-            ]}>
-              <TouchableOpacity style={styles.attachButton}>
-                <Ionicons name="add-circle" size={28} color={Colors.primary} />
-              </TouchableOpacity>
-              
-              <TextInput
-                ref={inputRef}
-                style={styles.customTextInput}
-                placeholder="Nhập tin nhắn..."
-                value={inputText}
-                onChangeText={setInputText}
-                multiline
-              />
-              
-              <TouchableOpacity 
-                style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-                onPress={handleCustomSend}
-                disabled={!inputText.trim()}
-              >
-                <Ionicons name="send" size={20} color="#fff" />
-              </TouchableOpacity>
+            <View>
+              {editingMessage && (
+                <View style={styles.editingBar}>
+                  <View style={styles.editingInfo}>
+                    <Ionicons name="pencil" size={16} color={Colors.primary} />
+                    <Text style={styles.editingText}>Đang chỉnh sửa tin nhắn</Text>
+                  </View>
+                  <TouchableOpacity onPress={handleCancelEdit}>
+                    <Ionicons name="close" size={20} color={Colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              <View style={[
+                styles.customInputContainer,
+                {
+                  marginBottom: Platform.OS === 'ios' ? 0 : 10,
+                  paddingBottom: 6,
+                  paddingTop: 6,
+                }
+              ]}>
+                <TouchableOpacity style={styles.attachButton}>
+                  <Ionicons name="add-circle" size={28} color={Colors.primary} />
+                </TouchableOpacity>
+                
+                <TextInput
+                  ref={inputRef}
+                  style={styles.customTextInput}
+                  placeholder={editingMessage ? "Chỉnh sửa tin nhắn..." : "Nhập tin nhắn..."}
+                  value={inputText}
+                  onChangeText={setInputText}
+                  multiline
+                />
+                
+                <TouchableOpacity 
+                  style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+                  onPress={handleCustomSend}
+                  disabled={!inputText.trim()}
+                >
+                  <Ionicons name={editingMessage ? "checkmark" : "send"} size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
             </View>
           )}
           minInputToolbarHeight={80} // Reserve space for custom toolbar
           bottomOffset={Platform.OS === 'ios' ? insets.bottom : 0} // Adjust for safe area
         />
       </View>
+      
+      {/* Context Menu Modal */}
+      <Modal
+        visible={contextMenu.visible}
+        transparent
+        animationType="none"
+        onRequestClose={closeContextMenu}
+      >
+        <TouchableOpacity 
+          style={styles.contextMenuOverlay} 
+          activeOpacity={1}
+          onPress={closeContextMenu}
+        >
+          <Animated.View
+            style={[
+              styles.contextMenuContainer,
+              {
+                opacity: menuAnimation,
+                transform: [{
+                  scale: menuAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1],
+                  }),
+                }],
+              }
+            ]}
+          >
+            <View style={styles.contextMenu}>
+              <TouchableOpacity
+                style={styles.contextMenuItem}
+                onPress={handleCopyMessage}
+              >
+                <Ionicons name="copy-outline" size={20} color={Colors.text} />
+                <Text style={styles.contextMenuText}>Sao chép</Text>
+              </TouchableOpacity>
+              
+              {contextMenu.isOwnMessage && (
+                <>
+                  <View style={styles.contextMenuDivider} />
+                  <TouchableOpacity
+                    style={styles.contextMenuItem}
+                    onPress={handleEditMessage}
+                  >
+                    <Ionicons name="pencil-outline" size={20} color={Colors.primary} />
+                    <Text style={[styles.contextMenuText, { color: Colors.primary }]}>
+                      Chỉnh sửa
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <View style={styles.contextMenuDivider} />
+                  <TouchableOpacity
+                    style={styles.contextMenuItem}
+                    onPress={handleDeleteMessage}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                    <Text style={[styles.contextMenuText, { color: '#ef4444' }]}>
+                      Xóa tin nhắn
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </Animated.View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -563,6 +797,62 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   sendButtonDisabled: { opacity: 0.5 },
+  editingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: Colors.primaryLight,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  editingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editingText: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '500',
+  },
+  contextMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contextMenuContainer: {
+    minWidth: 200,
+  },
+  contextMenu: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  contextMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  contextMenuText: {
+    fontSize: 16,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  contextMenuDivider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginHorizontal: 12,
+  },
 });
 
 export default ChatScreen;
