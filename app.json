@@ -22,9 +22,17 @@
       },
       "package": "com.bkmindcare.app"
     },
-    "web": {
-    },
-    "plugins": [],
+    "web": {},
+    "plugins": [
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "nghia-ll"
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": false
     },
@@ -33,4 +41,3 @@
     }
   }
 }
-

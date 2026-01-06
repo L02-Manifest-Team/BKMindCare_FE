@@ -7,7 +7,7 @@ import { CustomButton } from '../../components/CustomButton';
 import { MoodType } from '../../types';
 import { moodService, MoodEntry } from '../../services/moodService';
 import { LinearGradient } from 'expo-linear-gradient';
-
+import analytics from '@react-native-firebase/analytics';
 
 const moods: { type: MoodType; label: string; image: any }[] = [
   { type: 'SAD', label: 'Buồn', image: require('../../../assets/Sad.png') },
@@ -19,6 +19,13 @@ const moods: { type: MoodType; label: string; image: any }[] = [
   { type: 'CALM', label: 'Bình tĩnh', image: require('../../../assets/Happy.png') },
   { type: 'ANGRY', label: 'Tức giận', image: require('../../../assets/Sad.png') },
 ];
+
+export const moodCheckInAnalytics = async (mood: MoodType) => {
+  await analytics().logEvent('mood_check_in', {
+    mood_type: mood,
+  });
+};
+
 
 const MoodCheckInScreen = () => {
   const navigation = useNavigation();
@@ -66,6 +73,13 @@ const MoodCheckInScreen = () => {
         mood: selectedMood,
         notes: null,
       });
+
+
+      // ✅ LOG ANALYTICS TẠI ĐÂY
+    await analytics().logEvent('mood_check_in', {
+      mood_type: selectedMood,
+      has_checked_in_before: hasCheckedIn,
+    });
 
       // Reload today's mood to reflect the change
       await loadTodayMood();
