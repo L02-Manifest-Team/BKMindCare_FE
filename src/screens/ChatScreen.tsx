@@ -22,6 +22,31 @@ import { Colors } from '../constants/colors';
 import { chatService, Message } from '../services/chatService';
 import { useAuth } from '../context/AuthContext';
 import { websocketService } from '../services/websocketService';
+import analytics from '@react-native-firebase/analytics';
+
+/* ========= CHAT ========= */
+export const trackChatOpened = async (
+  chatId: number | string,
+  userRole: string
+) => {
+  await analytics().logEvent('open_chat', {
+    chat_id: chatId,
+    user_role: userRole,
+  });
+};
+
+export const trackMessageSent = async (
+  chatId: number | string,
+  userRole: string,
+  messageLength: number
+) => {
+  await analytics().logEvent('send_message', {
+    chat_id: chatId,
+    user_role: userRole,
+    message_length: messageLength,
+  });
+};
+
 
 const ChatScreen = () => {
   const navigation = useNavigation();
@@ -246,6 +271,9 @@ const ChatScreen = () => {
         hasLoadedRef.current = false;
         setMessages([]);
       }
+      if (chatId && user?.role) {
+        trackChatOpened(chatId, user.role);
+      }
       
       loadMessages();
       
@@ -325,6 +353,9 @@ const ChatScreen = () => {
       },
     };
     await onSend([message]);
+    if (chatId && user?.role) {
+      trackMessageSent(chatId, user.role, text.length);
+    }
   };
 
   const renderBubble = (props: any) => {
