@@ -43,7 +43,7 @@ const DoctorDetailScreen = () => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [appointmentType, setAppointmentType] = useState<'in-person' | 'video-call'>('in-person');
+  const [appointmentType, setAppointmentType] = useState<'in-person' | 'anonymous-chat'>('in-person');
 
   // Fetch doctor data
   const loadDoctor = useCallback(async () => {
@@ -358,7 +358,7 @@ const DoctorDetailScreen = () => {
 
               {/* Type of Appointment */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Type of appointment</Text>
+                <Text style={styles.sectionTitle}>Loại cuộc hẹn</Text>
                 <View style={styles.typeContainer}>
                   <TouchableOpacity
                     style={styles.typeOption}
@@ -367,16 +367,16 @@ const DoctorDetailScreen = () => {
                     <View style={styles.radioButton}>
                       {appointmentType === 'in-person' && <View style={styles.radioSelected} />}
                     </View>
-                    <Text style={styles.typeText}>In-person</Text>
+                    <Text style={styles.typeText}>Trực tiếp</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.typeOption}
-                    onPress={() => setAppointmentType('video-call')}
+                    onPress={() => setAppointmentType('anonymous-chat')}
                   >
                     <View style={styles.radioButton}>
-                      {appointmentType === 'video-call' && <View style={styles.radioSelected} />}
+                      {appointmentType === 'anonymous-chat' && <View style={styles.radioSelected} />}
                     </View>
-                    <Text style={styles.typeText}>Video call</Text>
+                    <Text style={styles.typeText}>Chat ẩn danh</Text>
                   </TouchableOpacity>
                 </View>
               </View>

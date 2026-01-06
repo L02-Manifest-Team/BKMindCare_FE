@@ -35,7 +35,7 @@ const AppointmentScreen = () => {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedDoctor, setSelectedDoctor] = useState<number | null>(null);
-  const [appointmentType, setAppointmentType] = useState<'in-person' | 'video-call'>('in-person');
+  const [appointmentType, setAppointmentType] = useState<'in-person' | 'anonymous-chat'>('in-person');
   const [selectedLocation, setSelectedLocation] = useState<'co-so-1' | 'co-so-2' | null>(null);
   const [reason, setReason] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -134,8 +134,8 @@ const AppointmentScreen = () => {
         ? locations.find(loc => loc.id === selectedLocation)?.address || ''
         : '';
       
-      const notes = appointmentType === 'video-call' 
-        ? 'Video call appointment'
+      const notes = appointmentType === 'anonymous-chat' 
+        ? 'Anonymous chat appointment'
         : `In-person appointment - ${locationInfo}`;
 
       const appointment = await appointmentService.createAppointment({
@@ -374,22 +374,22 @@ const AppointmentScreen = () => {
             <TouchableOpacity
               style={[
                 styles.typeOption,
-                appointmentType === 'video-call' && styles.selectedTypeOption,
+                appointmentType === 'anonymous-chat' && styles.selectedTypeOption,
               ]}
-              onPress={() => setAppointmentType('video-call')}
+              onPress={() => setAppointmentType('anonymous-chat')}
             >
               <View style={styles.radioButton}>
-                {appointmentType === 'video-call' && (
+                {appointmentType === 'anonymous-chat' && (
                   <View style={styles.radioButtonInner} />
                 )}
               </View>
               <Text
                 style={[
                   styles.typeText,
-                  appointmentType === 'video-call' && styles.selectedTypeText,
+                  appointmentType === 'anonymous-chat' && styles.selectedTypeText,
                 ]}
               >
-                Video call
+                Chat ẩn danh
               </Text>
             </TouchableOpacity>
           </View>
@@ -455,7 +455,7 @@ const AppointmentScreen = () => {
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Loại:</Text>
               <Text style={styles.summaryValue}>
-                {appointmentType === 'in-person' ? 'Trực tiếp' : 'Video call'}
+                {appointmentType === 'in-person' ? 'Trực tiếp' : 'Chat ẩn danh'}
               </Text>
             </View>
             {appointmentType === 'in-person' && selectedLocation && (

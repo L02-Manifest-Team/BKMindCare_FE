@@ -144,11 +144,14 @@ const DoctorDashboard = () => {
   };
 
   const getAppointmentType = (notes: string | null) => {
-    if (!notes) return 'Gọi video';
+    if (!notes) return 'Chat ẩn danh';
     if (notes.includes('Cơ sở 1') || notes.includes('Cơ sở 2')) {
       return 'Trực tiếp';
     }
-    return 'Gọi video';
+    if (notes.toLowerCase().includes('anonymous chat')) {
+      return 'Chat ẩn danh';
+    }
+    return 'Chat ẩn danh';
   };
 
   const getAppointmentLocation = (notes: string | null) => {
@@ -326,7 +329,7 @@ const DoctorDashboard = () => {
                       {appointment.patient?.full_name || 'Bệnh nhân'}
                     </Text>
                     <Text style={styles.appointmentDetail}>
-                      {appointmentType === 'Trực tiếp' ? 'Trực tiếp' : 'Gọi video'}, {location || 'Online'}
+                      {appointmentType === 'Trực tiếp' ? 'Trực tiếp' : 'Chat ẩn danh'}, {location || 'Online'}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />

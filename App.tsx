@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import { NotificationProvider } from './src/context/NotificationContext';
+import SurveyReminderModal from './src/components/SurveyReminderModal';
 
 // Screens
 import SplashScreen from './src/screens/SplashScreen';
@@ -60,6 +61,7 @@ export default function App() {
         <SafeAreaProvider>
           <StatusBar style="dark" />
           <NavigationContainer>
+          <SurveyReminderModal />
           <Stack.Navigator
             initialRouteName="Splash"
             screenOptions={{

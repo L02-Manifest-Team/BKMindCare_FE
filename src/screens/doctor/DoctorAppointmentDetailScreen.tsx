@@ -140,11 +140,14 @@ const DoctorAppointmentDetailScreen = () => {
   };
 
   const getAppointmentType = (notes: string | null) => {
-    if (!notes) return 'video-call';
+    if (!notes) return 'anonymous-chat';
     if (notes.includes('Cơ sở 1') || notes.includes('Cơ sở 2')) {
       return 'in-person';
     }
-    return 'video-call';
+    if (notes.toLowerCase().includes('anonymous chat')) {
+      return 'anonymous-chat';
+    }
+    return 'anonymous-chat';
   };
 
   const getAppointmentLocation = (notes: string | null) => {
@@ -259,7 +262,7 @@ const DoctorAppointmentDetailScreen = () => {
           <View style={styles.detailItem}>
             <View style={styles.detailIcon}>
               <Ionicons
-                name={appointmentType === 'video-call' ? 'videocam-outline' : 'location-outline'}
+                name={appointmentType === 'anonymous-chat' ? 'chatbubbles-outline' : 'location-outline'}
                 size={20}
                 color={Colors.primary}
               />
@@ -267,7 +270,7 @@ const DoctorAppointmentDetailScreen = () => {
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Loại cuộc hẹn</Text>
               <Text style={styles.detailValue}>
-                {appointmentType === 'video-call' ? 'Video call' : 'Trực tiếp'}
+                {appointmentType === 'anonymous-chat' ? 'Chat ẩn danh' : 'Trực tiếp'}
               </Text>
             </View>
           </View>

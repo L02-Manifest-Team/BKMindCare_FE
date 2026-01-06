@@ -166,11 +166,14 @@ const DoctorCalendarScreen = () => {
   };
 
   const getAppointmentType = (notes: string | null) => {
-    if (!notes) return 'online';
+    if (!notes) return 'anonymous-chat';
     if (notes.includes('Cơ sở 1') || notes.includes('Cơ sở 2')) {
-      return 'offline';
+      return 'in-person';
     }
-    return 'online';
+    if (notes.toLowerCase().includes('anonymous chat')) {
+      return 'anonymous-chat';
+    }
+    return 'anonymous-chat';
   };
 
   return (
@@ -258,7 +261,7 @@ const DoctorCalendarScreen = () => {
                         {appointment.patient?.full_name || 'Bệnh nhân'}
                       </Text>
                       <Text style={styles.upcomingTime}>
-                        {appointment.time_slot} • {appointmentType === 'offline' ? 'Trực tiếp' : 'Video call'}
+                        {appointment.time_slot} • {appointmentType === 'in-person' ? 'Trực tiếp' : 'Chat ẩn danh'}
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />

@@ -117,9 +117,9 @@ const AppointmentHistoryScreen = () => {
     }
   };
 
-  const getAppointmentType = (notes?: string): 'video-call' | 'in-person' => {
-    if (notes?.toLowerCase().includes('video')) {
-      return 'video-call';
+  const getAppointmentType = (notes?: string): 'anonymous-chat' | 'in-person' => {
+    if (notes?.toLowerCase().includes('anonymous chat')) {
+      return 'anonymous-chat';
     }
     return 'in-person';
   };
@@ -206,12 +206,12 @@ const AppointmentHistoryScreen = () => {
                         <View style={styles.appointmentMeta}>
                           <View style={styles.typeBadge}>
                             <Ionicons
-                              name={appointmentType === 'video-call' ? 'videocam' : 'location'}
+                              name={appointmentType === 'anonymous-chat' ? 'chatbubbles' : 'location'}
                               size={12}
                               color={Colors.primary}
                             />
                             <Text style={styles.typeText}>
-                              {appointmentType === 'video-call' ? 'Video call' : 'Trực tiếp'}
+                              {appointmentType === 'anonymous-chat' ? 'Chat ẩn danh' : 'Trực tiếp'}
                             </Text>
                           </View>
                           <View

@@ -107,9 +107,9 @@ const AppointmentDetailScreen = () => {
     }
   };
 
-  const getAppointmentType = (notes?: string): 'video-call' | 'in-person' => {
-    if (notes?.toLowerCase().includes('video')) {
-      return 'video-call';
+  const getAppointmentType = (notes?: string): 'anonymous-chat' | 'in-person' => {
+    if (notes?.toLowerCase().includes('anonymous chat')) {
+      return 'anonymous-chat';
     }
     return 'in-person';
   };
@@ -145,8 +145,8 @@ const AppointmentDetailScreen = () => {
   };
 
   const handleJoinCall = () => {
-    // TODO: Implement join video call
-    console.log('Join video call');
+    // Placeholder for future features (if any)
+    console.log('Join anonymous chat appointment');
   };
 
   return (
@@ -251,7 +251,7 @@ const AppointmentDetailScreen = () => {
           <View style={styles.detailItem}>
             <View style={styles.detailIcon}>
               <Ionicons
-                name={getAppointmentType(appointment.notes || undefined) === 'video-call' ? 'videocam-outline' : 'location-outline'}
+                name={getAppointmentType(appointment.notes || undefined) === 'anonymous-chat' ? 'chatbubbles-outline' : 'location-outline'}
                 size={20}
                 color={Colors.primary}
               />
@@ -259,7 +259,7 @@ const AppointmentDetailScreen = () => {
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Loại cuộc hẹn</Text>
               <Text style={styles.detailValue}>
-                {getAppointmentType(appointment.notes || undefined) === 'video-call' ? 'Video call' : 'Trực tiếp'}
+                {getAppointmentType(appointment.notes || undefined) === 'anonymous-chat' ? 'Chat ẩn danh' : 'Trực tiếp'}
               </Text>
             </View>
           </View>
@@ -291,15 +291,6 @@ const AppointmentDetailScreen = () => {
         {/* Actions */}
         {(appointment.status === 'CONFIRMED' || appointment.status === 'PENDING') && (
           <View style={styles.actionsSection}>
-            {getAppointmentType(appointment.notes || undefined) === 'video-call' && appointment.status === 'CONFIRMED' && (
-              <TouchableOpacity
-                style={[styles.actionButton, styles.joinButton]}
-                onPress={handleJoinCall}
-              >
-                <Ionicons name="videocam" size={20} color={Colors.background} />
-                <Text style={styles.joinButtonText}>Tham gia cuộc gọi</Text>
-              </TouchableOpacity>
-            )}
             <TouchableOpacity
               style={[styles.actionButton, styles.rescheduleButton]}
               onPress={handleReschedule}
