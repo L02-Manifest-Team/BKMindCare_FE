@@ -22,14 +22,14 @@ import { Colors } from '../constants/colors';
 import { chatService, Message } from '../services/chatService';
 import { useAuth } from '../context/AuthContext';
 import { websocketService } from '../services/websocketService';
-import analytics from '@react-native-firebase/analytics';
+import * as Analytics from 'expo-firebase-analytics';
 
 /* ========= CHAT ========= */
 export const trackChatOpened = async (
   chatId: number | string,
   userRole: string
 ) => {
-  await analytics().logEvent('open_chat', {
+  await Analytics.logEvent('open_chat', {
     chat_id: chatId,
     user_role: userRole,
   });
@@ -40,7 +40,7 @@ export const trackMessageSent = async (
   userRole: string,
   messageLength: number
 ) => {
-  await analytics().logEvent('send_message', {
+  await Analytics.logEvent('send_message', {
     chat_id: chatId,
     user_role: userRole,
     message_length: messageLength,

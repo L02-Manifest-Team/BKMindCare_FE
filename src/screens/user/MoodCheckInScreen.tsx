@@ -7,7 +7,7 @@ import { CustomButton } from '../../components/CustomButton';
 import { MoodType } from '../../types';
 import { moodService, MoodEntry } from '../../services/moodService';
 import { LinearGradient } from 'expo-linear-gradient';
-import analytics from '@react-native-firebase/analytics';
+import * as Analytics from 'expo-firebase-analytics';
 
 const moods: { type: MoodType; label: string; image: any }[] = [
   { type: 'SAD', label: 'Buồn', image: require('../../../assets/Sad.png') },
@@ -21,7 +21,7 @@ const moods: { type: MoodType; label: string; image: any }[] = [
 ];
 
 export const moodCheckInAnalytics = async (mood: MoodType) => {
-  await analytics().logEvent('mood_check_in', {
+  await Analytics.logEvent('mood_check_in', {
     mood_type: mood,
   });
 };
@@ -76,7 +76,7 @@ const MoodCheckInScreen = () => {
 
 
       // ✅ LOG ANALYTICS TẠI ĐÂY
-    await analytics().logEvent('mood_check_in', {
+    await Analytics.logEvent('mood_check_in', {
       mood_type: selectedMood,
       has_checked_in_before: hasCheckedIn,
     });
