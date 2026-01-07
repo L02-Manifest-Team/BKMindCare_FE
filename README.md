@@ -1,5 +1,9 @@
 # BKMindCare - Ứng dụng Chăm sóc Sức khỏe Tâm thần
 
+[![Tests](https://github.com/your-username/bkmindcare/workflows/Test%20and%20Coverage/badge.svg)](https://github.com/your-username/bkmindcare/actions)
+[![SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=bkmindcare&metric=coverage)](https://sonarcloud.io/summary/new_code?id=bkmindcare)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=bkmindcare&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=bkmindcare)
+
 ## ✨ Tính năng chính
 
 ### 👤 Dành cho Người dùng (User)
@@ -274,17 +278,111 @@ Login Screen
 - `npm run ios`: Chạy trên iOS simulator/device
 - `npm run web`: Chạy trên web browser
 - `npm run clear`: Xóa cache và khởi động lại
+- `npm test`: Chạy tất cả tests
+- `npm run test:watch`: Chạy tests ở chế độ watch
+- `npm run test:coverage`: Chạy tests với coverage report (HTML)
+- `npm run test:ci`: Chạy tests cho CI/CD với LCOV report
+
+## 🧪 Testing
+
+### Chạy Tests
+
+```bash
+# Chạy tất cả tests
+npm test
+
+# Chạy tests ở chế độ watch (tự động chạy lại khi code thay đổi)
+npm run test:watch
+
+# Chạy tests với coverage report (tạo HTML report trong thư mục coverage/)
+npm run test:coverage
+
+# Chạy tests cho CI/CD (tạo LCOV report cho SonarCloud)
+npm run test:ci
+```
+
+### Test Coverage
+
+Dự án sử dụng **Jest** và **React Native Testing Library** để viết unit tests. Mục tiêu coverage ≥ 70% cho các core modules.
+
+**Các màn hình đã được test:**
+- ✅ **OnboardingScreen** (7 test cases)
+  - Rendering: render đúng nội dung, buttons
+  - Navigation: Skip, Next, Back, Get Started
+  - Page navigation: chuyển trang, hiển thị content
+- ✅ **UserDashboard** (12 test cases)
+  - Rendering: welcome message, sections, buttons
+  - Navigation: Mood Check-in, Chat, Services, Profile
+  - Content display: appointments, doctors, services
+
+**Xem coverage report:**
+- Chạy `npm run test:coverage` để tạo HTML report trong thư mục `coverage/`
+- Mở `coverage/index.html` trong browser để xem chi tiết
+- Coverage report cũng được upload tự động lên GitHub Actions artifacts
+
+### Cấu trúc Test Files
+
+```
+src/
+├── screens/
+│   ├── __tests__/
+│   │   └── OnboardingScreen.test.tsx
+│   └── user/
+│       └── __tests__/
+│           └── UserDashboard.test.tsx
+```
+
+### CI/CD Integration
+
+- **GitHub Actions**: Tự động chạy tests khi push/PR
+  - Workflow file: `.github/workflows/test.yml`
+  - Test reports được upload lên GitHub Actions artifacts
+- **SonarCloud**: Phân tích code quality và coverage
+  - Config file: `sonar-project.properties`
+  - Dashboard: https://sonarcloud.io (cần setup project key)
+
+### Best Practices
+
+1. ✅ Viết test song song với code (mỗi component mới → tạo file test ngay)
+2. ✅ Chạy test locally trước khi push: `npm run test:watch`
+3. ✅ Đảm bảo coverage ≥ 70% cho các core modules
+4. ✅ Test cả happy path và error cases
+5. ✅ Sử dụng descriptive test names
+6. ✅ Mock external dependencies (navigation, storage, etc.)
+
+### Test Examples
+
+**Example: Testing component rendering**
+```typescript
+it('should render welcome message', () => {
+  const { getByText } = render(<UserDashboard />);
+  expect(getByText('Welcome back, Candy')).toBeTruthy();
+});
+```
+
+**Example: Testing user interaction**
+```typescript
+it('should navigate to MoodCheckIn when button is pressed', () => {
+  const { getByText } = render(<UserDashboard />);
+  const button = getByText('Mood Check-in');
+  fireEvent.press(button);
+  expect(mockNavigate).toHaveBeenCalledWith('MoodCheckIn');
+});
+```
 
 ## 📝 Ghi chú phát triển
 
 ### TODO
+- [x] Thêm unit tests (OnboardingScreen, UserDashboard)
+- [x] Thiết lập GitHub Actions CI/CD
+- [x] Cấu hình SonarCloud
 - [ ] Implement HCMUT authentication
 - [ ] Implement admin authentication
 - [ ] Tích hợp Firebase thật
 - [ ] Thêm push notifications
 - [ ] Cải thiện error handling
-- [ ] Thêm unit tests
 - [ ] Thêm integration tests
+- [ ] Thêm E2E tests với Detox
 
 ### Mock Data
 Dữ liệu mock được định nghĩa trong:
