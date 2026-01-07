@@ -1,4 +1,6 @@
 # BKMindCare - Ứng dụng Chăm sóc Sức khỏe Tâm thần
+## test
+![Coverage](./coverage-badge.svg)
 
 [![Tests](https://github.com/your-username/bkmindcare/workflows/Test%20and%20Coverage/badge.svg)](https://github.com/your-username/bkmindcare/actions)
 [![SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=bkmindcare&metric=coverage)](https://sonarcloud.io/summary/new_code?id=bkmindcare)
