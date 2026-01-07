@@ -1,53 +1,61 @@
-name: Test and Coverage
+name: CI - Test & Coverage
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [TESTING ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [TESTING ]
+
+permissions:
+  contents: write
+  actions: read
+  checks: write
 
 jobs:
   test:
-    name: Run Tests
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
-      
+          node-version: 18
+          cache: npm
+
       - name: Install dependencies
-        run: npm ci
-      
+        run: npm install
+
       - name: Run tests with coverage
-        run: npm run test:ci
-        continue-on-error: false
-      
-      - name: Generate test report
-        if: always()
-        run: |
-          mkdir -p test-results
-          npm run test:coverage || true
-      
-      - name: Upload coverage to artifacts
-        if: always()
+        run: npm test -- --coverage --coverageReporters="json-summary" --coverageReporters="lcov"
+
+      - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: test-coverage-report
-          path: |
-            coverage/
-            test-results/
-          retention-days: 30
-      
-      - name: Upload coverage to SonarCloud
-        if: always()
-        uses: sonarsource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          name: coverage-report
+          path: coverage
 
+      # 👇 NEW: Extract coverage percentage
+      - name: Extract coverage percentage
+        id: coverage_json
+        run: |
+          LINES=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+          echo "lines=$LINES" >> $GITHUB_OUTPUT
+
+      # Generate coverage badge
+      - name: Generate coverage badge
+        id: coverage
+        uses: emibcn/badge-action@v2
+        with:
+          label: coverage
+          status: ${{ steps.coverage_json.outputs.lines }}
+          color: green
+          path: coverage-badge.svg
+
+      - name: Commit coverage badge
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update coverage badge"
+          file_pattern: coverage-badge.svg
