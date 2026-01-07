@@ -136,5 +136,36 @@ export const chatService = {
       throw error;
     }
   },
+
+  // Edit a message
+  editMessage: async (
+    chatId: number,
+    messageId: number,
+    content: string
+  ): Promise<Message> => {
+    try {
+      const response = await api.put<BackendMessageResponse>(
+        `/chats/${chatId}/messages/${messageId}`,
+        { content }
+      );
+      return normalizeMessage(response);
+    } catch (error) {
+      console.error('Edit message error:', error);
+      throw error;
+    }
+  },
+
+  // Delete a message
+  deleteMessage: async (
+    chatId: number,
+    messageId: number
+  ): Promise<void> => {
+    try {
+      await api.delete(`/chats/${chatId}/messages/${messageId}`);
+    } catch (error) {
+      console.error('Delete message error:', error);
+      throw error;
+    }
+  },
 };
 

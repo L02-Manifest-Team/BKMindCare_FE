@@ -2,8 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from './api';
 
 interface WebSocketMessage {
-  type: 'new_message' | 'pong' | 'error';
+  type: 'new_message' | 'message_edited' | 'message_deleted' | 'pong' | 'error';
   message?: any;
+  message_id?: number;
   error?: string;
 }
 
@@ -15,10 +16,19 @@ class WebSocketService {
   private reconnectDelay = 1000;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private onMessageCallback: ((message: any) => void) | null = null;
+  private onEditCallback: ((message: any) => void) | null = null;
+  private onDeleteCallback: ((messageId: number) => void) | null = null;
   private onErrorCallback: ((error: Error) => void) | null = null;
   private onCloseCallback: (() => void) | null = null;
 
-  async connect(chatId: number, onMessage: (message: any) => void, onError?: (error: Error) => void, onClose?: () => void): Promise<void> {
+  async connect(
+    chatId: number, 
+    onMessage: (message: any) => void, 
+    onError?: (error: Error) => void, 
+    onClose?: () => void,
+    onEdit?: (message: any) => void,
+    onDelete?: (messageId: number) => void
+  ): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN && this.chatId === chatId) {
       // Already connected to this chat
       return;
@@ -31,6 +41,8 @@ class WebSocketService {
 
     this.chatId = chatId;
     this.onMessageCallback = onMessage;
+    this.onEditCallback = onEdit || null;
+    this.onDeleteCallback = onDelete || null;
     this.onErrorCallback = onError || null;
     this.onCloseCallback = onClose || null;
 
@@ -73,6 +85,20 @@ class WebSocketService {
               console.log('[WebSocket] Calling onMessageCallback for message:', data.message.id);
             }
             this.onMessageCallback(data.message);
+          }
+          
+          if (data.type === 'message_edited' && data.message && this.onEditCallback) {
+            if (__DEV__) {
+              console.log('[WebSocket] Calling onEditCallback for message:', data.message.id);
+ }
+            this.onEditCallback(data.message);
+          }
+          
+          if (data.type === 'message_deleted' && data.message_id && this.onDeleteCallback) {
+            if (__DEV__) {
+              console.log('[WebSocket] Calling onDeleteCallback for message:', data.message_id);
+            }
+            this.onDeleteCallback(data.message_id);
           }
           
           if (data.type === 'error' && this.onErrorCallback) {
@@ -136,6 +162,8 @@ class WebSocketService {
     this.chatId = null;
     this.reconnectAttempts = 0;
     this.onMessageCallback = null;
+    this.onEditCallback = null;
+    this.onDeleteCallback = null;
     this.onErrorCallback = null;
     this.onCloseCallback = null;
   }
